@@ -1,0 +1,70 @@
+{
+  "runId": "layout_20260611_233026",
+  "generatedAt": "2026-06-11 23:30:27",
+  "spaceType": "舒适型",
+  "scenarioSpaceType": "舒适型",
+  "recommendationMode": "match_input",
+  "strategy": {
+    "key": "",
+    "label": "自动推荐"
+  },
+  "targetBeds": 60,
+  "requestedBeds": 60,
+  "totalBeds": 60,
+  "totalCost": 76840,
+  "totalQuantity": 20,
+  "totalTypes": 1,
+  "selectedModules": {
+    "A": 20
+  },
+  "site": {
+    "evacuees": 60,
+    "requestedEvacuees": 60,
+    "length": 50.0,
+    "width": 30.0,
+    "days": 7,
+    "area": 1500.0
+  },
+  "recommendationProfile": {
+    "space_type": "舒适型",
+    "module_preferences": [
+      "舒适型",
+      "均衡型",
+      "经济型"
+    ],
+    "people_priority": "舒适型",
+    "people_locked": false,
+    "time_label": "中期安置",
+    "time_shift": 0,
+    "density_level": "低密度",
+    "per_capita_area": 25.0
+  },
+  "recommendationMeta": {
+    "recommendationMode": "match_input",
+    "fillRatio": 0.3434666666666667,
+    "finalScore": 0.9343466666666665,
+    "solutionLevel": "match_target",
+    "timeLimitSeconds": 20.0
+  },
+  "capacityEstimate": {
+    "requestedEvacuees": 60,
+    "effectiveEvacuees": 60,
+    "maxFeasibleEvacuees": 60,
+    "capacityLimited": false,
+    "message": ""
+  },
+  "layoutMetrics": {
+    "usedLength": 42.8,
+    "usedWidth": 30.0,
+    "lengthUtilization": 0.856,
+    "widthUtilization": 1.0,
+    "footprintRatio": 0.856
+  },
+  "outputFiles": {
+    "textureOnly": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_texture_only_layout_20260611_233026.png",
+    "withLabels": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_with_labels_layout_20260611_233026.png",
+    "latestTextureOnly": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_texture_only.png",
+    "latestWithLabels": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_with_labels.png"
+  },
+  "textSummary": "生成时间：2026-06-11 23:30:27\n推荐方式：自动推荐\n推荐模式：人数匹配\n空间类型：舒适型\n目标床位：60 床\n当前床位：60 床\n模块总数：20 个\n模块明细：Ax20\n人均面积：25.00 平方米/人\n人数优先判断：舒适型\n安置时长判断：中期安置"
+}

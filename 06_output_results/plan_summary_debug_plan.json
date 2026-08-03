@@ -1,0 +1,60 @@
+{
+  "runId": "debug_plan",
+  "generatedAt": "2026-06-09 17:31:40",
+  "spaceType": "舒适型",
+  "strategy": {
+    "key": "comfort",
+    "label": "舒适型"
+  },
+  "targetBeds": 55,
+  "totalBeds": 172,
+  "totalCost": 151452,
+  "totalQuantity": 62,
+  "totalTypes": 4,
+  "selectedModules": {
+    "B": 6,
+    "D": 8,
+    "E": 24,
+    "F": 24
+  },
+  "site": {
+    "evacuees": 55,
+    "length": 60.0,
+    "width": 40.0,
+    "days": 7,
+    "area": 2400.0
+  },
+  "recommendationProfile": {
+    "space_type": "舒适型",
+    "module_preferences": [
+      "舒适型",
+      "均衡型",
+      "经济型"
+    ],
+    "people_priority": "舒适型",
+    "people_locked": false,
+    "time_label": "中期安置",
+    "time_shift": 0,
+    "per_capita_area": 43.64
+  },
+  "recommendationMeta": {
+    "fillRatio": null,
+    "finalScore": null,
+    "solutionLevel": "manual_selection",
+    "timeLimitSeconds": 8
+  },
+  "layoutMetrics": {
+    "usedLength": 60.0,
+    "usedWidth": 40.0,
+    "lengthUtilization": 1.0,
+    "widthUtilization": 1.0,
+    "footprintRatio": 1.0
+  },
+  "outputFiles": {
+    "textureOnly": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_texture_only_debug_plan.png",
+    "withLabels": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_with_labels_debug_plan.png",
+    "latestTextureOnly": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_texture_only.png",
+    "latestWithLabels": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_with_labels.png"
+  },
+  "textSummary": "生成时间：2026-06-09 17:31:40\n推荐方式：舒适型\n空间类型：舒适型\n目标床位：55 床\n当前床位：172 床\n模块总数：62 个\n模块明细：Bx6、Dx8、Ex24、Fx24\n人均面积：43.64 平方米/人\n人数优先判断：舒适型\n安置时长判断：中期安置"
+}

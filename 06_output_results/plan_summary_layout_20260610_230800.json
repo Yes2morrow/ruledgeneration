@@ -1,0 +1,58 @@
+{
+  "runId": "layout_20260610_230800",
+  "generatedAt": "2026-06-10 23:08:04",
+  "spaceType": "经济型",
+  "strategy": {
+    "key": "",
+    "label": "自动推荐"
+  },
+  "targetBeds": 200,
+  "totalBeds": 250,
+  "totalCost": 86250,
+  "totalQuantity": 125,
+  "totalTypes": 1,
+  "selectedModules": {
+    "D": 125
+  },
+  "site": {
+    "evacuees": 200,
+    "length": 50.0,
+    "width": 30.0,
+    "days": 3,
+    "area": 1500.0
+  },
+  "recommendationProfile": {
+    "space_type": "经济型",
+    "module_preferences": [
+      "经济型",
+      "均衡型",
+      "舒适型"
+    ],
+    "people_priority": "经济型",
+    "people_locked": false,
+    "time_label": "短期安置",
+    "time_shift": -1,
+    "density_level": "高密度/高压",
+    "per_capita_area": 7.5
+  },
+  "recommendationMeta": {
+    "fillRatio": null,
+    "finalScore": null,
+    "solutionLevel": "manual_selection",
+    "timeLimitSeconds": 20
+  },
+  "layoutMetrics": {
+    "usedLength": 35.6,
+    "usedWidth": 26.4,
+    "lengthUtilization": 0.712,
+    "widthUtilization": 0.88,
+    "footprintRatio": 0.6266
+  },
+  "outputFiles": {
+    "textureOnly": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_texture_only_layout_20260610_230800.png",
+    "withLabels": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_with_labels_layout_20260610_230800.png",
+    "latestTextureOnly": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_texture_only.png",
+    "latestWithLabels": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_with_labels.png"
+  },
+  "textSummary": "生成时间：2026-06-10 23:08:04\n推荐方式：自动推荐\n空间类型：经济型\n目标床位：200 床\n当前床位：250 床\n模块总数：125 个\n模块明细：Dx125\n人均面积：7.50 平方米/人\n人数优先判断：经济型\n安置时长判断：短期安置"
+}

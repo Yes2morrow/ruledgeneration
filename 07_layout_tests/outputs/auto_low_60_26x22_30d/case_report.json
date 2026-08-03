@@ -1,0 +1,63 @@
+{
+  "case_type": "auto_layout",
+  "N": 60,
+  "field": {
+    "length": 26.0,
+    "width": 22.0
+  },
+  "days": 30,
+  "recommendation_profile": {
+    "space_type": "舒适型",
+    "module_preferences": [
+      "舒适型",
+      "均衡型",
+      "经济型"
+    ],
+    "people_priority": "舒适型",
+    "people_locked": false,
+    "time_label": "长期安置",
+    "time_shift": 1,
+    "density_level": "低密度",
+    "per_capita_area": 9.53
+  },
+  "capacity_estimate": {
+    "requestedEvacuees": 60,
+    "effectiveEvacuees": 60,
+    "maxFeasibleEvacuees": 60,
+    "capacityLimited": false,
+    "message": ""
+  },
+  "generated_at": "2026-06-10 23:44:02",
+  "success": true,
+  "issues": [],
+  "notes": [
+    "group_type 分布: {'A_group_two': 2, 'A_group_three': 1, 'B_quad_cluster': 3, 'B_row_pair': 1, 'B_single': 1}",
+    "本案例未选中 F/G，说明当前评分更偏向其他均衡型模块。"
+  ],
+  "space_type": "舒适型",
+  "density_level": "低密度",
+  "selected_modules": {
+    "A": 10,
+    "B": 15
+  },
+  "fill_ratio": 0.6601398601398601,
+  "final_score": 0.8140559440559441,
+  "solution_level": "fill_best",
+  "plan_replay_success": true,
+  "csv_summary": {
+    "total_groups": 8,
+    "type_distribution": {
+      "A": 3,
+      "B": 5
+    },
+    "total_area": 377.6,
+    "layout_bounds": {
+      "min_x": 0.0,
+      "min_y": 0.0,
+      "max_x": 26.0,
+      "max_y": 22.0,
+      "used_width": 26.0,
+      "used_height": 22.0
+    }
+  }
+}

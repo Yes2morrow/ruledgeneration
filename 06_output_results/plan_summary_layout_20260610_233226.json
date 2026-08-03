@@ -1,0 +1,68 @@
+{
+  "runId": "layout_20260610_233226",
+  "generatedAt": "2026-06-10 23:32:27",
+  "spaceType": "经济型",
+  "strategy": {
+    "key": "",
+    "label": "自动推荐"
+  },
+  "targetBeds": 20,
+  "requestedBeds": 110,
+  "totalBeds": 20,
+  "totalCost": 6900,
+  "totalQuantity": 10,
+  "totalTypes": 1,
+  "selectedModules": {
+    "D": 10
+  },
+  "site": {
+    "evacuees": 20,
+    "requestedEvacuees": 110,
+    "length": 22.0,
+    "width": 18.0,
+    "days": 3,
+    "area": 396.0
+  },
+  "recommendationProfile": {
+    "space_type": "经济型",
+    "module_preferences": [
+      "经济型",
+      "均衡型",
+      "舒适型"
+    ],
+    "people_priority": "经济型",
+    "people_locked": true,
+    "time_label": "短期安置",
+    "time_shift": 0,
+    "density_level": "高密度/高压",
+    "per_capita_area": 3.6,
+    "capacity_mode": "max_capacity"
+  },
+  "recommendationMeta": {
+    "fillRatio": 0.0627,
+    "finalScore": null,
+    "solutionLevel": "capacity_limit",
+    "timeLimitSeconds": 20
+  },
+  "capacityEstimate": {
+    "requestedEvacuees": 110,
+    "effectiveEvacuees": 20,
+    "maxFeasibleEvacuees": 20,
+    "capacityLimited": true,
+    "message": "当前场地在现有规则下最多可落地约 20 人；输入的 110 人已超出上限，现返回最大容纳推荐方案。"
+  },
+  "layoutMetrics": {
+    "usedLength": 13.8,
+    "usedWidth": 1.8,
+    "lengthUtilization": 0.6273,
+    "widthUtilization": 0.1,
+    "footprintRatio": 0.0627
+  },
+  "outputFiles": {
+    "textureOnly": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_texture_only_layout_20260610_233226.png",
+    "withLabels": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_with_labels_layout_20260610_233226.png",
+    "latestTextureOnly": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_texture_only.png",
+    "latestWithLabels": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_with_labels.png"
+  },
+  "textSummary": "生成时间：2026-06-10 23:32:27\n推荐方式：自动推荐\n空间类型：经济型\n目标床位：20 床\n当前床位：20 床\n模块总数：10 个\n模块明细：Dx10\n人均面积：3.60 平方米/人\n人数优先判断：经济型\n安置时长判断：短期安置\n原始输入人数：110 人\n容量提醒：当前场地在现有规则下最多可落地约 20 人；输入的 110 人已超出上限，现返回最大容纳推荐方案。"
+}

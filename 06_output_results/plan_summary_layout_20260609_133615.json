@@ -1,0 +1,51 @@
+{
+  "runId": "layout_20260609_133615",
+  "generatedAt": "2026-06-09 13:36:16",
+  "spaceType": "舒适型",
+  "strategy": {
+    "key": "balanced",
+    "label": "平衡型"
+  },
+  "targetBeds": 30,
+  "totalBeds": 32,
+  "totalCost": 28792,
+  "totalQuantity": 10,
+  "totalTypes": 3,
+  "selectedModules": {
+    "E": 4,
+    "F": 4,
+    "G": 2
+  },
+  "site": {
+    "evacuees": 30,
+    "length": 20.0,
+    "width": 18.0,
+    "days": 7,
+    "area": 360.0
+  },
+  "recommendationProfile": {
+    "space_type": "舒适型",
+    "module_preferences": [
+      "舒适型",
+      "均衡型",
+      "经济型"
+    ],
+    "people_priority": "舒适型",
+    "people_locked": false,
+    "time_label": "中期安置",
+    "time_shift": 0,
+    "per_capita_area": 12.0
+  },
+  "recommendationMeta": {
+    "fillRatio": 0.8221111111111112,
+    "finalScore": 0.6305714285714287,
+    "solutionLevel": "fill_best"
+  },
+  "outputFiles": {
+    "textureOnly": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_texture_only_layout_20260609_133615.png",
+    "withLabels": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_with_labels_layout_20260609_133615.png",
+    "latestTextureOnly": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_texture_only.png",
+    "latestWithLabels": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_with_labels.png"
+  },
+  "textSummary": "生成时间：2026-06-09 13:36:16\n推荐方式：平衡型\n空间类型：舒适型\n目标床位：30 床\n当前床位：32 床\n模块总数：10 个\n模块明细：Ex4、Fx4、Gx2\n人均面积：12.00 平方米/人\n人数优先判断：舒适型\n安置时长判断：中期安置"
+}

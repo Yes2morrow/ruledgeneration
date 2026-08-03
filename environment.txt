@@ -1,0 +1,25 @@
+应急床位布局优化系统运行环境说明
+
+- Windows 10/11 (推荐)
+- macOS 10.15+
+- Linux (Ubuntu 18.04+, CentOS 7+)
+
+硬件要求
+最低配置:
+     CPU: 双核 2.0GHz
+     内存: 4GB RAM
+     存储: 500MB 可用空间
+     显示: 1024x768 分辨率
+
+软件依赖
+必需组件:
+- Python 3.8+ 解释器（测试环境为Python3.13.5）
+- pip 包
+
+项目结构说明
+- 01_pre_selection/: 前期筛选模块
+- 02_placement_generation/: 布局生成模块
+- 03_visualization/: 可视化模块
+- 04_tests/: 测试模块
+- 05_config_and_tools/: 配置和工具
+- 06_output_results/: 输出结果

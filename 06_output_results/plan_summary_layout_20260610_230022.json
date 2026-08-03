@@ -1,0 +1,57 @@
+{
+  "runId": "layout_20260610_230022",
+  "generatedAt": "2026-06-10 23:00:26",
+  "spaceType": "均衡型",
+  "strategy": {
+    "key": "",
+    "label": "自动推荐"
+  },
+  "targetBeds": 200,
+  "totalBeds": 270,
+  "totalCost": 93150,
+  "totalQuantity": 90,
+  "totalTypes": 1,
+  "selectedModules": {
+    "C": 90
+  },
+  "site": {
+    "evacuees": 200,
+    "length": 50.0,
+    "width": 30.0,
+    "days": 3,
+    "area": 1500.0
+  },
+  "recommendationProfile": {
+    "space_type": "均衡型",
+    "module_preferences": [
+      "均衡型",
+      "经济型",
+      "舒适型"
+    ],
+    "people_priority": "均衡型",
+    "people_locked": false,
+    "time_label": "短期安置",
+    "time_shift": 0,
+    "per_capita_area": 7.5
+  },
+  "recommendationMeta": {
+    "fillRatio": null,
+    "finalScore": null,
+    "solutionLevel": "manual_selection",
+    "timeLimitSeconds": 20
+  },
+  "layoutMetrics": {
+    "usedLength": 45.5,
+    "usedWidth": 27.0,
+    "lengthUtilization": 0.91,
+    "widthUtilization": 0.9,
+    "footprintRatio": 0.819
+  },
+  "outputFiles": {
+    "textureOnly": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_texture_only_layout_20260610_230022.png",
+    "withLabels": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_with_labels_layout_20260610_230022.png",
+    "latestTextureOnly": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_texture_only.png",
+    "latestWithLabels": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_with_labels.png"
+  },
+  "textSummary": "生成时间：2026-06-10 23:00:26\n推荐方式：自动推荐\n空间类型：均衡型\n目标床位：200 床\n当前床位：270 床\n模块总数：90 个\n模块明细：Cx90\n人均面积：7.50 平方米/人\n人数优先判断：均衡型\n安置时长判断：短期安置"
+}

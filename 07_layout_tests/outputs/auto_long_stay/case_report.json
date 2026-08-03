@@ -1,0 +1,27 @@
+{
+  "case_type": "auto_layout",
+  "N": 60,
+  "field": {
+    "length": 26.0,
+    "width": 22.0
+  },
+  "days": 30,
+  "recommendation_profile": {
+    "space_type": "舒适型",
+    "module_preferences": [
+      "舒适型",
+      "均衡型",
+      "经济型"
+    ],
+    "people_priority": "舒适型",
+    "people_locked": false,
+    "time_label": "长期安置",
+    "time_shift": 1,
+    "per_capita_area": 9.53
+  },
+  "generated_at": "2026-06-08 16:59:09",
+  "success": false,
+  "issues": [
+    "自动推荐未返回有效布局方案。"
+  ]
+}

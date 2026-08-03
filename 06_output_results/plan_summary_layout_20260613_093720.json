@@ -1,0 +1,71 @@
+{
+  "runId": "layout_20260613_093720",
+  "generatedAt": "2026-06-13 09:37:21",
+  "spaceType": "舒适型",
+  "scenarioSpaceType": "舒适型",
+  "recommendationMode": "match_input",
+  "strategy": {
+    "key": "",
+    "label": "自动推荐"
+  },
+  "targetBeds": 100,
+  "requestedBeds": 100,
+  "totalBeds": 100,
+  "totalCost": 127540,
+  "totalQuantity": 34,
+  "totalTypes": 2,
+  "selectedModules": {
+    "A": 32,
+    "B": 2
+  },
+  "site": {
+    "evacuees": 100,
+    "requestedEvacuees": 100,
+    "length": 50.0,
+    "width": 30.0,
+    "days": 3,
+    "area": 1500.0
+  },
+  "recommendationProfile": {
+    "space_type": "舒适型",
+    "module_preferences": [
+      "舒适型",
+      "均衡型",
+      "经济型"
+    ],
+    "people_priority": "舒适型",
+    "people_locked": false,
+    "time_label": "短期安置",
+    "time_shift": 0,
+    "density_level": "低密度",
+    "per_capita_area": 15.0
+  },
+  "recommendationMeta": {
+    "recommendationMode": "match_input",
+    "fillRatio": 0.5602133333333333,
+    "finalScore": 0.9510213333333334,
+    "solutionLevel": "match_target",
+    "timeLimitSeconds": 20.0
+  },
+  "capacityEstimate": {
+    "requestedEvacuees": 100,
+    "effectiveEvacuees": 100,
+    "maxFeasibleEvacuees": 100,
+    "capacityLimited": false,
+    "message": ""
+  },
+  "layoutMetrics": {
+    "usedLength": 46.8,
+    "usedWidth": 30.0,
+    "lengthUtilization": 0.936,
+    "widthUtilization": 1.0,
+    "footprintRatio": 0.936
+  },
+  "outputFiles": {
+    "textureOnly": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_texture_only_layout_20260613_093720.png",
+    "withLabels": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_with_labels_layout_20260613_093720.png",
+    "latestTextureOnly": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_texture_only.png",
+    "latestWithLabels": "D:\\zhintiweapp\\规则系统\\06_output_results\\layout_with_labels.png"
+  },
+  "textSummary": "生成时间：2026-06-13 09:37:21\n推荐方式：自动推荐\n推荐模式：人数匹配\n空间类型：舒适型\n目标床位：100 床\n当前床位：100 床\n模块总数：34 个\n模块明细：Ax32、Bx2\n人均面积：15.00 平方米/人\n人数优先判断：舒适型\n安置时长判断：短期安置"
+}

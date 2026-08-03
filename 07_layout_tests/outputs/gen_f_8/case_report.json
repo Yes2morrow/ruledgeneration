@@ -1,0 +1,12 @@
+{
+  "case_type": "group_generation",
+  "module_name": "F",
+  "quantity": 8,
+  "expanded_group_count": 2,
+  "group_types": {
+    "F1": 2
+  },
+  "total_modules": 8,
+  "issues": [],
+  "generated_at": "2026-06-10 23:42:32"
+}

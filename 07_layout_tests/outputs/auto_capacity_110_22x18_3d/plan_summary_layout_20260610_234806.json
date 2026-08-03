@@ -1,0 +1,70 @@
+{
+  "runId": "layout_20260610_234806",
+  "generatedAt": "2026-06-10 23:48:09",
+  "spaceType": "经济型",
+  "scenarioSpaceType": "舒适型",
+  "strategy": {
+    "key": "",
+    "label": "自动推荐"
+  },
+  "targetBeds": 68,
+  "requestedBeds": 110,
+  "totalBeds": 68,
+  "totalCost": 23460,
+  "totalQuantity": 24,
+  "totalTypes": 2,
+  "selectedModules": {
+    "D": 4,
+    "C": 20
+  },
+  "site": {
+    "evacuees": 68,
+    "requestedEvacuees": 110,
+    "length": 22.0,
+    "width": 18.0,
+    "days": 3,
+    "area": 396.0
+  },
+  "recommendationProfile": {
+    "space_type": "舒适型",
+    "module_preferences": [
+      "舒适型",
+      "均衡型",
+      "经济型"
+    ],
+    "people_priority": "舒适型",
+    "people_locked": false,
+    "time_label": "短期安置",
+    "time_shift": 0,
+    "density_level": "低密度",
+    "per_capita_area": 7.33,
+    "capacity_mode": "max_capacity"
+  },
+  "recommendationMeta": {
+    "fillRatio": 0.6336363636363636,
+    "finalScore": null,
+    "solutionLevel": "capacity_limit",
+    "timeLimitSeconds": 20.0
+  },
+  "capacityEstimate": {
+    "requestedEvacuees": 110,
+    "effectiveEvacuees": 68,
+    "maxFeasibleEvacuees": 68,
+    "capacityLimited": true,
+    "message": "当前场地在现有规则下最多可落地约 68 人；输入的 110 人已超出上限，现返回最大容纳推荐方案。"
+  },
+  "layoutMetrics": {
+    "usedLength": 19.5,
+    "usedWidth": 16.0,
+    "lengthUtilization": 0.8864,
+    "widthUtilization": 0.8889,
+    "footprintRatio": 0.7879
+  },
+  "outputFiles": {
+    "textureOnly": "D:\\zhintiweapp\\规则系统\\07_layout_tests\\outputs\\auto_capacity_110_22x18_3d\\layout_texture_only_layout_20260610_234806.png",
+    "withLabels": "D:\\zhintiweapp\\规则系统\\07_layout_tests\\outputs\\auto_capacity_110_22x18_3d\\layout_with_labels_layout_20260610_234806.png",
+    "latestTextureOnly": "D:\\zhintiweapp\\规则系统\\07_layout_tests\\outputs\\auto_capacity_110_22x18_3d\\layout_texture_only.png",
+    "latestWithLabels": "D:\\zhintiweapp\\规则系统\\07_layout_tests\\outputs\\auto_capacity_110_22x18_3d\\layout_with_labels.png"
+  },
+  "textSummary": "生成时间：2026-06-10 23:48:09\n推荐方式：自动推荐\n空间类型：经济型\n目标床位：68 床\n当前床位：68 床\n模块总数：24 个\n模块明细：Dx4、Cx20\n人均面积：7.33 平方米/人\n人数优先判断：舒适型\n安置时长判断：短期安置\n原始输入人数：110 人\n容量提醒：当前场地在现有规则下最多可落地约 68 人；输入的 110 人已超出上限，现返回最大容纳推荐方案。"
+}

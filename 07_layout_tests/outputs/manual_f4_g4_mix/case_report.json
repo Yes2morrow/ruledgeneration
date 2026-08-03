@@ -1,0 +1,39 @@
+{
+  "case_type": "manual_layout",
+  "selection": {
+    "F": 4,
+    "G": 4
+  },
+  "field": {
+    "length": 28.0,
+    "width": 20.0
+  },
+  "space_type": "均衡型",
+  "generated_at": "2026-06-10 23:42:33",
+  "success": true,
+  "issues": [],
+  "notes": [
+    "group_type 分布: {'F1': 1, 'G_single': 4}"
+  ],
+  "group_count": 5,
+  "group_types": {
+    "F1": 1,
+    "G_single": 4
+  },
+  "csv_summary": {
+    "total_groups": 5,
+    "type_distribution": {
+      "F": 1,
+      "G": 4
+    },
+    "total_area": 102.92,
+    "layout_bounds": {
+      "min_x": 0,
+      "min_y": 0,
+      "max_x": 20.4,
+      "max_y": 10.1,
+      "used_width": 20.4,
+      "used_height": 10.1
+    }
+  }
+}
