@@ -81,6 +81,8 @@ def calculate_layout_traditional(groups_config: list, aisle: float, all_width: f
         # 根据模块类型决定群组间距：模块A群组之间无间距，其他模块使用标准间距
         if mod['name'] == 'A':
             current_group_spacing = 0.0  # 模块A群组之间无间距
+        elif mod['name'] == 'C':
+            current_group_spacing = 1.5  # 模块C所有群组之间横纵间距 1.5m
         else:
             current_group_spacing = default_group_spacing  # 其他模块使用标准间距
         

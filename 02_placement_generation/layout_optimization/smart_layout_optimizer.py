@@ -662,7 +662,7 @@ def calculate_smart_layout(groups_config, aisle, all_width, all_length, modules_
         elif mod['name'] == 'B':
             current_group_spacing = 2.0  # B 同类组团横向相邻时保留 2m，纵向堆叠由专用逻辑决定
         elif mod['name'] == 'C':
-            current_group_spacing = 0.0  # 模块C同类型群组间无间距
+            current_group_spacing = 1.5  # 模块C所有群组之间横纵间距 1.5m
         elif mod['name'] == 'F':
             current_group_spacing = 1.5  # 模块F横向组团与同类群组外间距按 1.5m 控制
         elif mod['name'] == 'G':
@@ -694,10 +694,9 @@ def calculate_smart_layout(groups_config, aisle, all_width, all_length, modules_
                 inter_module_spacing, current_group_spacing, mod['name']
             )
         elif mod['name'] == 'C':
-            # 模块C使用专用的位置寻找逻辑，支持水平间距、垂直无间距
-            from universal_smart_position_finder import find_best_position_universal
-            print(f"使用模块C专用逻辑寻找位置，水平间距{current_group_spacing}m，垂直无间距")
-            best_x, best_y, rotated, fits = find_best_position_universal(
+            # 模块C所有群组间横纵均1.5m间距，统一使用标准位置寻找逻辑
+            print(f"使用标准逻辑寻找模块C位置，间距{current_group_spacing}m")
+            best_x, best_y, rotated, fits = find_best_position(
                 group, current_positions, all_length, all_width, current_group_spacing, mod['name']
             )
         else:
@@ -728,6 +727,18 @@ def calculate_smart_layout(groups_config, aisle, all_width, all_length, modules_
                     print(
                         f"\n群组 {i+1}: B模块 {group.get('group_type')} 放置失败，"
                         f"尝试拆分为更小的B组团继续补空"
+                    )
+                    groups_config[i:i+1] = fallback_groups
+                    continue
+
+            if mod['name'] == 'C':
+                from module_c_organizer import decompose_module_c_group
+
+                fallback_groups = decompose_module_c_group(group)
+                if fallback_groups:
+                    print(
+                        f"\n群组 {i+1}: C模块 {group.get('group_type')} 放置失败，"
+                        f"尝试拆分为更小的C组团继续补空"
                     )
                     groups_config[i:i+1] = fallback_groups
                     continue

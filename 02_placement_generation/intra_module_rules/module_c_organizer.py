@@ -1,46 +1,73 @@
-import math
 from core_calculations import modules
+
+
+def _build_c_group(rows: int, cols: int, group_type: str) -> dict:
+    """构建模块C群组配置的辅助函数"""
+    module_c_info = modules['C']
+    return {
+        'module': module_c_info,
+        'rows': rows,
+        'cols': cols,
+        'count': 1,
+        'group_type': group_type,
+        'module_count': rows * cols,
+        'vertical_gap': 0,     # 群组内垂直无间距，实现紧贴镜像
+        'horizontal_gap': 0,   # 群组内水平无间距
+    }
+
 
 def organize_module_c(quantity: int):
     """
-    根据用户为模块C定义的特定数学规则生成布局群组。
+    根据模块C定义的规则生成布局群组，优先使用大面积群组。
 
-    规则摘要:
-    - 基本单位是"组合单元"，由2个C模块垂直镜像构成（2行*1列）。
-    - 每个"组合单元"作为一个独立的群组。
-    - C模块总数为 Q = 2n，n是"组合单元"的数量。
-    - 每个群组都是2行*1列的垂直镜像配置。
+    群组层级（面积从大到小）:
+    1. C_quad:  4行*2列 = 8个模块，群组间间距1.5m（x轴和y轴）
+    2. C_pair:  2行*1列 = 2个模块，群组间间距0m
+
+    布局策略：优先以大面积群组计算，次第尝试小面积群组。
 
     Args:
-        quantity (int): 模块C的总数量。
+        quantity (int): 模块C的总数量（必须为偶数）。
 
     Returns:
-        list: 一个字典列表，每个字典代表一个群组，供 visualization.py 使用。
+        list: 群组配置字典列表，大面积群组在前。
     """
     if quantity <= 0:
         return []
 
-    # 注意: 模块C数量的奇偶校验已在 core_calculations.py 和 interactive_module_selector.py 中处理。
-    # 这里假设传入的 quantity 始终为偶数。
-
-    n = quantity // 2  # "组合单元"的数量
-    module_c_info = modules['C']
-    
     groups = []
-    # 为模块C的群组添加间距配置：垂直无间距，水平无间距（群组内）
-    c_group_config = {
-        'vertical_gap': 0,    # 垂直无间距，实现紧贴镜像
-        'horizontal_gap': 0   # 水平无间距（群组内不需要间距）
-    }
 
-    # 为每个"组合单元"创建一个独立的群组（2行*1列）
-    for i in range(n):
-        groups.append({
-            'module': module_c_info,
-            'rows': 2,    # 2行：上下垂直镜像
-            'cols': 1,    # 1列：每个群组只有1列
-            'count': 1,   # 每个群组包含1个"组合单元"
-            **c_group_config
-        })
-            
+    # 第一优先级：C_quad（4行*2列 = 8模块）
+    n_quad = quantity // 8
+    remaining = quantity - n_quad * 8
+
+    for _ in range(n_quad):
+        groups.append(_build_c_group(4, 2, 'C_quad'))
+
+    # 第二优先级：C_pair（2行*1列 = 2模块）
+    n_pair = remaining // 2
+
+    for _ in range(n_pair):
+        groups.append(_build_c_group(2, 1, 'C_pair'))
+
     return groups
+
+
+def decompose_module_c_group(group: dict):
+    """
+    当 C 大组团在剩余空间放不下时，逐级拆分为更小的 C 组团用于补空。
+
+    分解链: C_quad(4x2) -> 4 x C_pair(2x1)
+    """
+    group_type = group.get('group_type', 'C_pair')
+
+    if group_type == 'C_quad':
+        return [
+            _build_c_group(2, 1, 'C_pair'),
+            _build_c_group(2, 1, 'C_pair'),
+            _build_c_group(2, 1, 'C_pair'),
+            _build_c_group(2, 1, 'C_pair'),
+        ]
+
+    # C_pair 已是最小组合单元，无法继续拆分
+    return []

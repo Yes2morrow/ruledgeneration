@@ -1,3 +1,22 @@
 __pycache__/
 *.pyc
 *.pyo
+
+# Output files
+06_output_results/*.png
+06_output_results/*.json
+06_output_results/*.txt
+06_output_results/legacy/
+
+# Analysis exports
+03_visualization/layout_analysis_exports/
+
+# Test outputs
+04_test/
+
+# Legacy images
+03_visualization/image/legacy/
+
+# Temp files
+~$*
+*.tmp

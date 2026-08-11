@@ -200,13 +200,21 @@ def can_place_group_universal(x, y, width, height, current_positions, module_typ
                     required_spacing
                 ):
                     return False
+            elif group_spacing > 0:
+                # C_quad 等需要间距的群组：水平和垂直都保持间距
+                if violates_spacing_rule(
+                    x, y, width, height,
+                    existing_x, existing_y, existing_width, existing_height,
+                    required_spacing
+                ):
+                    return False
             elif violates_spacing_rule(
                 x, y, width, height,
                 existing_x, existing_y, existing_width, existing_height,
                 required_spacing,
                 allow_zero_vertical_spacing=True
             ):
-                return False  # 水平方向没有足够间距，不能放置
+                return False  # C_pair 等无间距群组：水平方向检查间距，垂直允许0间距
         elif module_type == 'D' and existing_module_type == 'D':
             if mixed_orientation:
                 if violates_spacing_rule(

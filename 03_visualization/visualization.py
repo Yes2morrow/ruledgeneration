@@ -303,6 +303,71 @@ def draw_layout(groups_config: list, aisle: float, all_length: float, all_width:
                                  facecolor='black', alpha=0.7))
             continue
 
+        # 模块C：打组绘制 —— 外框(群组) + 内框(每对模块) + 填充图片
+        if mod['name'] == 'C' and group_type in ['C_quad', 'C_pair']:
+            group_width = (width + draw_horizontal_gap) * draw_cols - draw_horizontal_gap
+            group_height = (height + draw_vertical_gap) * draw_rows - draw_vertical_gap
+
+            # 1. 画群组大框
+            group_rect = plt.Rectangle(
+                (x_offset, y_offset), group_width, group_height,
+                linewidth=2.5, edgecolor='#2c3e50', facecolor=colors.get(mod_type, '#bdc3c7'),
+                alpha=0.3, zorder=1
+            )
+            ax.add_patch(group_rect)
+
+            # 2. 画每个"模块对"的小框并填充图片
+            # 每对 = 2行1列（垂直镜像紧贴），C_quad 有 4 对 (2列×2行对), C_pair 有 1 对
+            pair_rows = draw_rows // 2  # 沿y轴有几对
+            pair_cols = draw_cols       # 沿x轴有几对
+            pair_height = height * 2 + draw_vertical_gap  # 一对的高度（2个模块紧贴）
+
+            for pr in range(pair_rows):
+                for pc in range(pair_cols):
+                    # 小框左下角坐标
+                    box_x = x_offset + pc * (width + draw_horizontal_gap)
+                    box_y = y_offset + pr * (pair_height + draw_vertical_gap)
+
+                    # 画小框边框
+                    pair_rect = plt.Rectangle(
+                        (box_x, box_y), width, pair_height,
+                        linewidth=1.5, edgecolor='#34495e', facecolor='none',
+                        alpha=0.6, zorder=2
+                    )
+                    ax.add_patch(pair_rect)
+
+                    # 在小框内填充两个模块的图片（上下紧贴）
+                    for sub_r in range(2):
+                        img_x = box_x
+                        img_y = box_y + sub_r * (height + draw_vertical_gap)
+                        texture_handler.create_enhanced_textured_rectangle(
+                            ax, img_x, img_y, width, height,
+                            mod['name'], current_group_index, group_type,
+                            rotated=rotated,
+                            facecolor=colors[mod_type],
+                            edgecolor='none',
+                            linewidth=0.0,
+                            alpha=1.0,
+                            add_shadow=False,
+                            add_label=False
+                        )
+
+            # 3. 群组标签
+            if show_labels:
+                text_x = x_offset + group_width / 2
+                text_y = y_offset + group_height / 2
+                font_size = min(group_width, group_height) * 0.8
+                font_size = max(6, min(font_size, 12))
+                ax.text(text_x, text_y, 'C',
+                        horizontalalignment='center',
+                        verticalalignment='center',
+                        fontsize=font_size,
+                        color='white',
+                        weight='bold',
+                        bbox=dict(boxstyle="round,pad=0.2",
+                                 facecolor='black', alpha=0.7))
+            continue
+
         # 绘制群组内的单个模块单元
         for r in range(draw_rows):
             for c in range(draw_cols):
