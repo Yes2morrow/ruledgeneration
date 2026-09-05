@@ -1,156 +1,131 @@
+"""命令行入口 - generate / recommend 两种模式。
+
+用法:
+  # generate 模式: 用户指定模块
+  python main.py --mode generate --evacuees 36 --length 48 --width 14 --days 3 \\
+      --modules-json '{"A": 4, "C": 8}'
+
+  # recommend 模式: 按人数自动推荐
+  python main.py --mode recommend --evacuees 60 --length 48 --width 14 --days 7 \\
+      --strategy balanced
+
+  # 用建筑场地(多边形)替代矩形
+  python main.py --mode recommend --evacuees 60 --building slab_residential_18f --days 7
+"""
+from __future__ import annotations
+
 import argparse
 import json
-import os
 import sys
+from pathlib import Path
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "..", "01_pre_selection"))
-
-from core_calculations import build_recommendation_profile, validate_inputs
-from interactive_module_selector import interactive_module_selection
-from service_adapter import generate_plan_payload, generate_recommendation_payload
-
-
-def build_parser():
-    parser = argparse.ArgumentParser(description="规则系统命令行入口")
-    parser.add_argument(
-        "--mode",
-        choices=["recommend", "generate", "interactive"],
-        default="interactive",
-        help="运行模式：recommend 返回推荐结果，generate 直接生成布局图，interactive 为本地交互调试",
-    )
-    parser.add_argument("--evacuees", type=int, help="避难人数")
-    parser.add_argument("--length", type=float, help="场地长度（米）")
-    parser.add_argument("--width", type=float, help="场地宽度（米）")
-    parser.add_argument("--days", type=int, help="安置时长（天）")
-    parser.add_argument(
-        "--strategy",
-        choices=["comfort", "economy", "balanced"],
-        help="前端策略选择，对应舒适型、经济型、平衡型",
-    )
-    parser.add_argument(
-        "--modules-json",
-        help="手动指定模块数量，示例：{\"A\": 2, \"E\": 6}",
-    )
-    parser.add_argument(
-        "--output-dir",
-        help="布局图输出目录，默认写入 06_output_results",
-    )
-    parser.add_argument(
-        "--run-id",
-        help="外部指定本次生成任务 ID，便于和小程序任务号对齐",
-    )
-    parser.add_argument(
-        "--time-limit-seconds",
-        type=float,
-        default=20.0,
-        help="自动推荐搜索的时间上限（秒），超时后返回当前最佳方案",
-    )
-    parser.add_argument(
-        "--recommendation-mode",
-        choices=["fill", "match_input"],
-        default="match_input",
-        help="推荐模式：match_input 为严格按输入人数推荐，fill 为铺满优先",
-    )
-    return parser
+_CURRENT = Path(__file__).resolve().parent
+_RULE_ROOT = _CURRENT.parent
+for _sub in (
+    _RULE_ROOT / "01_pre_selection",
+    _RULE_ROOT / "05_config_and_tools",
+):
+    if str(_sub) not in sys.path:
+        sys.path.insert(0, str(_sub))
 
 
-def require_common_args(args):
-    missing_args = []
-    for field in ("evacuees", "length", "width", "days"):
-        if getattr(args, field) is None:
-            missing_args.append(field)
-    if missing_args:
-        raise ValueError(f"缺少必要参数：{', '.join(missing_args)}")
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description="规则系统2.0 - 配置驱动布局生成")
+    p.add_argument("--mode", choices=["generate", "recommend"], default="recommend",
+                   help="运行模式: recommend 按人数推荐, generate 用指定模块")
+    p.add_argument("--evacuees", type=int, required=True, help="避难人数(目标床位)")
+    p.add_argument("--length", type=float, help="场地长度(米, 矩形场地)")
+    p.add_argument("--width", type=float, help="场地宽度(米, 矩形场地)")
+    p.add_argument("--building", type=str, help="建筑配置 id(多边形场地, 优先于 length/width)")
+    p.add_argument("--days", type=int, default=3, help="安置时长(天)")
+    p.add_argument("--strategy", choices=["comfort", "economy", "balanced"],
+                   help="推荐策略(recommend 模式用)")
+    p.add_argument("--modules-json", type=str,
+                   help='generate 模式的模块选择 JSON, 如 \'{"A": 4, "C": 8}\'')
+    p.add_argument("--output-dir", type=str, help="输出目录(默认 06_output_results)")
+    p.add_argument("--run-id", type=str, help="任务 id(默认自动生成)")
+    p.add_argument("--quiet", action="store_true", help="只输出结果 JSON, 不打印进度")
+    return p
 
 
-def run_interactive_mode():
-    evacuees = int(input("避难人数："))
-    all_length = float(input("体育馆长度（米）："))
-    all_width = float(input("体育馆宽度（米）："))
-    days = int(input("安置时长（天）："))
-    area = all_length * all_width
+def _resolve_site(args):
+    """解析场地: building 优先, 否则用 length/width。"""
+    from config_loader import get_site_polygon
 
-    per_capita_area = validate_inputs(evacuees, area, days)
-    recommendation_profile = build_recommendation_profile(evacuees, area, days)
-    print(
-        f"推荐空间类型：{recommendation_profile['space_type']}，"
-        f"人均面积：{per_capita_area:.2f} m^2/人"
-    )
-    print(
-        f"推荐依据：人数优先={recommendation_profile['people_priority']}，"
-        f"时长判断={recommendation_profile['time_label']}，"
-        f"模块偏好={recommendation_profile['module_preferences']}"
-    )
-
-    layout_plan = interactive_module_selection(
-        recommendation_profile["space_type"],
-        evacuees,
-        all_length,
-        all_width,
-        module_preferences=recommendation_profile["module_preferences"],
-        recommendation_profile=recommendation_profile,
-        days=days,
-        recommendation_mode="match_input",
-        time_limit_seconds=20.0,
-    )
-    if not layout_plan:
-        print("未能生成有效的布局方案。")
-        return 1
-
-    payload = generate_plan_payload(
-        evacuees=evacuees,
-        length=all_length,
-        width=all_width,
-        days=days,
-        selected_modules=layout_plan["modules"],
-    )
-    print(json.dumps(payload, ensure_ascii=False, indent=2))
-    return 0
+    if args.building:
+        return get_site_polygon(building_id=args.building), ("building", args.building)
+    if args.length is not None and args.width is not None:
+        return get_site_polygon(length_m=args.length, width_m=args.width), ("rect", (args.length, args.width))
+    raise ValueError("必须提供 --building 或 (--length 和 --width)")
 
 
-def main():
+def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
 
     try:
-        if args.mode == "interactive":
-            return run_interactive_mode()
+        if args.mode == "generate" and not args.modules_json:
+            parser.error("generate 模式必须提供 --modules-json")
 
-        require_common_args(args)
-        selected_modules = json.loads(args.modules_json) if args.modules_json else None
+        site_polygon, site_meta = _resolve_site(args)
 
+        if not args.quiet:
+            print(f"[规则系统2.0] 模式={args.mode} 人数={args.evacuees} 场地={site_meta} 时长={args.days}天",
+                  file=sys.stderr)
+
+        # 推荐模式直接用矩形 length/width 调 service_adapter
         if args.mode == "recommend":
+            if site_meta[0] == "building":
+                # recommend 模式暂用矩形参数; 多边形场地走 generate
+                # 这里把 building footprint 拟合为外接矩形长度/宽度
+                from config_loader import building_to_site_polygon
+                pts = building_to_site_polygon(args.building)
+                length = max(p[0] for p in pts)
+                width = max(p[1] for p in pts)
+            else:
+                length, width = args.length, args.width
+
+            from service_adapter import generate_recommendation_payload
             payload = generate_recommendation_payload(
                 evacuees=args.evacuees,
-                length=args.length,
-                width=args.width,
+                length=length,
+                width=width,
                 days=args.days,
                 strategy_key=args.strategy,
-                recommendation_mode=args.recommendation_mode,
-                time_limit_seconds=args.time_limit_seconds,
-            )
-        else:
-            payload = generate_plan_payload(
-                evacuees=args.evacuees,
-                length=args.length,
-                width=args.width,
-                days=args.days,
-                strategy_key=args.strategy,
-                recommendation_mode=args.recommendation_mode,
-                selected_modules=selected_modules,
                 output_dir=args.output_dir,
                 run_id=args.run_id,
-                time_limit_seconds=args.time_limit_seconds,
+            )
+        else:
+            selected = json.loads(args.modules_json)
+            if site_meta[0] == "building":
+                from config_loader import building_to_site_polygon
+                pts = building_to_site_polygon(args.building)
+                length = max(p[0] for p in pts)
+                width = max(p[1] for p in pts)
+            else:
+                length, width = args.length, args.width
+
+            from service_adapter import generate_plan_payload
+            payload = generate_plan_payload(
+                evacuees=args.evacuees,
+                length=length,
+                width=width,
+                days=args.days,
+                selected_modules=selected,
+                strategy_key=args.strategy,
+                output_dir=args.output_dir,
+                run_id=args.run_id,
             )
 
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
+
     except ValueError as exc:
-        print(f"输入错误：{exc}", file=sys.stderr)
+        print(f"输入错误: {exc}", file=sys.stderr)
         return 1
     except Exception as exc:
-        print(f"发生未知错误：{exc}", file=sys.stderr)
-        raise
+        print(f"发生错误: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

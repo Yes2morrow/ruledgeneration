@@ -1,0 +1,123 @@
+module_id: E
+groups:
+- group_type: E_group
+  description: 可变行数大群组(最多16模块，2列)
+  rows: 8
+  cols: 2
+  module_count: 16
+  layout_priority: preferred
+  internal_spacing:
+    horizontal_gap_m: 0
+    vertical_gap_m: 1.5
+  external_spacing:
+    horizontal_gap_m: 1.5
+    vertical_gap_m: 1.5
+  arrangement:
+  - row: 0
+    col: 0
+    rotation: 0
+    mirror: none
+  - row: 1
+    col: 0
+    rotation: 0
+    mirror: vertical
+  - row: 2
+    col: 0
+    rotation: 0
+    mirror: none
+  - row: 3
+    col: 0
+    rotation: 0
+    mirror: vertical
+  - row: 4
+    col: 0
+    rotation: 0
+    mirror: none
+  - row: 5
+    col: 0
+    rotation: 0
+    mirror: vertical
+  - row: 6
+    col: 0
+    rotation: 0
+    mirror: none
+  - row: 7
+    col: 0
+    rotation: 0
+    mirror: vertical
+  - row: 0
+    col: 1
+    rotation: 0
+    mirror: horizontal
+  - row: 1
+    col: 1
+    rotation: 0
+    mirror: both
+  - row: 2
+    col: 1
+    rotation: 0
+    mirror: horizontal
+  - row: 3
+    col: 1
+    rotation: 0
+    mirror: both
+  - row: 4
+    col: 1
+    rotation: 0
+    mirror: horizontal
+  - row: 5
+    col: 1
+    rotation: 0
+    mirror: both
+  - row: 6
+    col: 1
+    rotation: 0
+    mirror: horizontal
+  - row: 7
+    col: 1
+    rotation: 0
+    mirror: both
+  decompose_to: E_pair
+  sub_groups:
+  - E_pair
+  - E_single
+- group_type: E_pair
+  description: 1行x2列子群组(2模块)
+  rows: 1
+  cols: 2
+  module_count: 2
+  layout_priority: flexible
+  internal_spacing:
+    horizontal_gap_m: 0
+    vertical_gap_m: 0
+  external_spacing:
+    horizontal_gap_m: 1.2
+    vertical_gap_m: 1.2
+  arrangement:
+  - row: 0
+    col: 0
+    rotation: 0
+    mirror: none
+  - row: 0
+    col: 1
+    rotation: 0
+    mirror: horizontal
+  decompose_to: E_single
+- group_type: E_single
+  description: 1行x1列单模块(1模块)
+  rows: 1
+  cols: 1
+  module_count: 1
+  layout_priority: fill
+  internal_spacing:
+    horizontal_gap_m: 0
+    vertical_gap_m: 0
+  external_spacing:
+    horizontal_gap_m: 1.2
+    vertical_gap_m: 1.2
+  arrangement:
+  - row: 0
+    col: 0
+    rotation: 0
+    mirror: none
+  decompose_to: null

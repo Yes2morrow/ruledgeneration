@@ -1,0 +1,20 @@
+id: slab_residential_18f
+building_type: slab
+name: 板式住宅 18F
+footprint:
+  # 以建筑定位中心为局部坐标原点，单位 m，可自由增减顶点。
+  points:
+    - [-24.0, -7.0]
+    - [24.0, -7.0]
+    - [24.0, 7.0]
+    - [-24.0, 7.0]
+floors: 18
+first_floor_height_m: 3.6
+standard_floor_height_m: 3.0
+height_m: 54.6
+entrances:
+  - point: [0.0, -7.0]
+    span_axis: x
+    neg_extent: 1.5
+    pos_extent: 1.5
+    facing_deg: 180.0

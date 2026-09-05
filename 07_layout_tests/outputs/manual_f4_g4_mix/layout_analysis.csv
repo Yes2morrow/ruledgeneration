@@ -1,6 +1,0 @@
-﻿group_id,module_type,x_position,y_position,width,height,x_end,y_end,is_rotated,module_count,rows,cols,area
-1,F,0,0,7.5,7.6,7.5,7.6,False,4,2,2,57.0
-2,G,9.0,0,2.8,4.1,11.8,4.1,False,1,1,1,11.48
-3,G,9.0,6,2.8,4.1,11.8,10.1,False,1,1,1,11.48
-4,G,13.3,0.0,2.8,4.1,16.1,4.1,False,1,1,1,11.48
-5,G,17.6,0.0,2.8,4.1,20.4,4.1,False,1,1,1,11.48

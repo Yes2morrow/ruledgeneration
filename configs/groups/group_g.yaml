@@ -1,0 +1,20 @@
+module_id: G
+groups:
+- group_type: G_single
+  description: 1行x1列单模块(1模块)
+  rows: 1
+  cols: 1
+  module_count: 1
+  layout_priority: fill
+  internal_spacing:
+    horizontal_gap_m: 0
+    vertical_gap_m: 0
+  external_spacing:
+    horizontal_gap_m: 1.2
+    vertical_gap_m: 1.2
+  arrangement:
+  - row: 0
+    col: 0
+    rotation: 0
+    mirror: none
+  decompose_to: null

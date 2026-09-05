@@ -1,0 +1,64 @@
+module_id: E
+name: 模块E
+type: 均衡型
+beds: 3
+cost: 2133
+priority: 1
+dimensions:
+  length_mm: 3000
+  width_mm: 5500
+bed_orientation:
+  head_direction: north
+  head_position_mm: 5500
+road_areas:
+- name: main_aisle
+  description: 模块底部主要通道(占位，待用户手动修改)
+  polygon:
+  - - 1900
+    - 0
+  - - 1900
+    - 5500
+  - - 2600
+    - 5500
+  - - 2600
+    - 0
+beds_layout:
+- bed_id: 1
+  head_direction: north
+  head_position_mm: 5500
+  polygon:
+  - - 0
+    - 5500
+  - - 1200
+    - 5500
+  - - 1200
+    - 3600
+  - - 0
+    - 3600
+- bed_id: 2
+  head_direction: west
+  head_position_mm: 5500
+  polygon:
+  - - 0
+    - 2900
+  - - 1900
+    - 2900
+  - - 1900
+    - 1700
+  - - 0
+    - 1700
+- bed_id: 3
+  head_direction: west
+  head_position_mm: 5500
+  polygon:
+  - - 0
+    - 0
+  - - 0
+    - 1200
+  - - 1900
+    - 1200
+  - - 1900
+    - 0
+visual:
+  single_texture: moduleE_single.png
+  color: '#00008B'

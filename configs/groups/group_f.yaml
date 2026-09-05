@@ -1,0 +1,50 @@
+module_id: F
+groups:
+- group_type: F1
+  description: 2行x2列大群组(4模块)
+  rows: 2
+  cols: 2
+  module_count: 4
+  layout_priority: preferred
+  internal_spacing:
+    horizontal_gap_m: 0
+    vertical_gap_m: 0
+  external_spacing:
+    horizontal_gap_m: 1.2
+    vertical_gap_m: 1.2
+  arrangement:
+  - row: 0
+    col: 0
+    rotation: 0
+    mirror: vertical
+  - row: 1
+    col: 0
+    rotation: 0
+    mirror: none
+  - row: 0
+    col: 1
+    rotation: 0
+    mirror: both
+  - row: 1
+    col: 1
+    rotation: 0
+    mirror: horizontal
+  decompose_to: F_single
+- group_type: F_single
+  description: 1行x1列单模块(1模块)
+  rows: 1
+  cols: 1
+  module_count: 1
+  layout_priority: fill
+  internal_spacing:
+    horizontal_gap_m: 0
+    vertical_gap_m: 0
+  external_spacing:
+    horizontal_gap_m: 1.2
+    vertical_gap_m: 1.2
+  arrangement:
+  - row: 0
+    col: 0
+    rotation: 0
+    mirror: none
+  decompose_to: null

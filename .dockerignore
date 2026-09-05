@@ -1,18 +1,22 @@
-**/__pycache__/
+__pycache__/
 *.pyc
-*.pyo
-*.pyd
-.Python
-.pytest_cache/
-.mypy_cache/
-.venv/
-venv/
-generated_runs/
-06_output_results/
+.git/
+.env
+04_test/
 07_layout_tests/
 LEGACY/
-03_visualization/__pycache__/
-03_visualization/*.csv
-03_visualization/*_analysis.txt
-03_visualization/layout_analysis_exports/
-05_config_and_tools/debug_*.py
+*.pptx
+
+# 本地 vendor 的 fastapi 等依赖(由 requirements.txt 安装, 不要进镜像)
+.pkgs/
+# 本地运行产物(12MB+), 云端用云存储, 不要进镜像
+06_output_results/
+generated_runs/
+tmp_test_output/
+tmp_cloudrun_test/
+# 本地配置编辑器, 云端不部署(云端只跑 cloudrun_app)
+webui/
+# 文档与大文件
+*.docx
+*.mp4
+_render_test.png

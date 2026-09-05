@@ -1,0 +1,64 @@
+module_id: F
+name: 模块F
+type: 均衡型
+beds: 3
+cost: 3373
+priority: 2
+dimensions:
+  length_mm: 3000
+  width_mm: 3800
+bed_orientation:
+  head_direction: north
+  head_position_mm: 3800
+road_areas:
+- name: main_aisle
+  description: 模块底部主要通道(占位，待用户手动修改)
+  polygon:
+  - - 0
+    - 1900
+  - - 3000
+    - 1900
+  - - 3000
+    - 1100
+  - - 0
+    - 1100
+beds_layout:
+- bed_id: 1
+  head_direction: west
+  head_position_mm: 3800
+  polygon:
+  - - 0
+    - 0
+  - - 0
+    - 1100
+  - - 1900
+    - 1100
+  - - 1900
+    - 0
+- bed_id: 2
+  head_direction: north
+  head_position_mm: 3800
+  polygon:
+  - - 0
+    - 3800
+  - - 1100
+    - 3800
+  - - 1100
+    - 1900
+  - - 0
+    - 1900
+- bed_id: 3
+  head_direction: north
+  head_position_mm: 3800
+  polygon:
+  - - 1900
+    - 3800
+  - - 3000
+    - 3800
+  - - 3000
+    - 1900
+  - - 1900
+    - 1900
+visual:
+  single_texture: moduleF_single.png
+  color: '#00008B'

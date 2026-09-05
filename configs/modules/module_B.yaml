@@ -1,0 +1,52 @@
+module_id: B
+name: 模块B
+type: 舒适型
+beds: 2
+cost: 2298
+priority: 2
+dimensions:
+  length_mm: 4000
+  width_mm: 2000
+bed_orientation:
+  head_direction: east
+  head_position_mm: 4000
+road_areas:
+- name: main_aisle
+  description: 模块底部主要通道(占位，待用户手动修改)
+  polygon:
+  - - 1300
+    - 0
+  - - 2700
+    - 0
+  - - 2700
+    - 1300
+  - - 1300
+    - 1300
+beds_layout:
+- bed_id: 1
+  head_direction: north
+  head_position_mm: 4000
+  polygon:
+  - - 0
+    - 0
+  - - 1300
+    - 0
+  - - 1300
+    - 2000
+  - - 0
+    - 2000
+- bed_id: 2
+  head_direction: north
+  head_position_mm: 4000
+  polygon:
+  - - 4000
+    - 0
+  - - 2700
+    - -1
+  - - 2700
+    - 2000
+  - - 4000
+    - 2000
+visual:
+  single_texture: moduleB_single.png
+  color: '#8B0000'

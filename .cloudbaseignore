@@ -1,0 +1,17 @@
+.git/
+__pycache__/
+*.pyc
+.env
+04_test/
+07_layout_tests/
+LEGACY/
+*.pptx
+.pkgs/
+06_output_results/
+generated_runs/
+tmp_test_output/
+tmp_cloudrun_test/
+webui/
+*.docx
+*.mp4
+_render_test.png

@@ -1,0 +1,64 @@
+module_id: C
+name: 模块C
+type: 经济型
+beds: 3
+cost: 1035
+priority: 2
+dimensions:
+  length_mm: 4500
+  width_mm: 2500
+bed_orientation:
+  head_direction: north
+  head_position_mm: 2500
+road_areas:
+- name: main_aisle
+  description: 模块底部主要通道(占位，待用户手动修改)
+  polygon:
+  - - 0
+    - 0
+  - - 4500
+    - 0
+  - - 4500
+    - 600
+  - - 0
+    - 600
+beds_layout:
+- bed_id: 1
+  head_direction: north
+  head_position_mm: 2500
+  polygon:
+  - - 0
+    - 600
+  - - 1200
+    - 600
+  - - 1200
+    - 2500
+  - - 0
+    - 2500
+- bed_id: 2
+  head_direction: north
+  head_position_mm: 2500
+  polygon:
+  - - 1800
+    - 600
+  - - 3000
+    - 600
+  - - 3000
+    - 2500
+  - - 1800
+    - 2500
+- bed_id: 3
+  head_direction: north
+  head_position_mm: 2500
+  polygon:
+  - - 3300
+    - 600
+  - - 4500
+    - 600
+  - - 4500
+    - 2500
+  - - 3300
+    - 2500
+visual:
+  single_texture: moduleC_single.png
+  color: '#006400'

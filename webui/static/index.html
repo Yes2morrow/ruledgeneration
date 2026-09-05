@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>规则系统2.0 配置编辑器</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- 顶部标题栏 -->
+    <header class="topbar">
+        <div class="topbar-left">
+            <span class="logo">⚙</span>
+            <span class="title">规则系统2.0 配置编辑器</span>
+            <span id="current-file-label" class="file-tag">未打开文件</span>
+        </div>
+        <div class="topbar-right">
+            <span id="status-msg" class="status-msg"></span>
+            <button id="btn-run-layout" class="btn btn-ghost" title="输入参数并运行排布程序">▶ 启动排布</button>
+            <button id="btn-undo" class="btn btn-ghost" title="撤销 (Ctrl+Z)">↩ 撤销</button>
+            <button id="btn-redo" class="btn btn-ghost" title="重做 (Ctrl+Y)">↪ 重做</button>
+            <button id="btn-apply-yaml" class="btn btn-ghost" title="将左侧 YAML 文本解析为结构化数据并刷新预览">应用YAML</button>
+            <button id="btn-save" class="btn btn-primary" disabled>保存</button>
+        </div>
+    </header>
+
+    <main class="layout">
+        <!-- 左侧栏: 文件列表 -->
+        <aside class="sidebar">
+            <div class="tabs" role="tablist">
+                <button class="tab active" data-cat="modules" role="tab">模块</button>
+                <button class="tab" data-cat="groups" role="tab">群组</button>
+            </div>
+            <div class="search-box">
+                <input id="search-input" type="text" placeholder="筛选文件…" autocomplete="off">
+            </div>
+            <ul id="file-list" class="file-list"></ul>
+        </aside>
+
+        <!-- 中央区域: Canvas 预览 + YAML 编辑器 -->
+        <section class="center">
+            <div class="canvas-pane">
+                <div class="pane-header">
+                    <span class="pane-title">可视化预览</span>
+                    <div class="pane-tools">
+                        <button id="btn-fit" class="btn btn-ghost" title="自适应缩放">适应</button>
+                        <button id="btn-zoom-in" class="btn btn-ghost" title="放大">＋</button>
+                        <button id="btn-zoom-out" class="btn btn-ghost" title="缩小">－</button>
+                        <button id="btn-reset" class="btn btn-ghost" title="重置视图">重置</button>
+                        <span id="zoom-label" class="zoom-label">100%</span>
+                    </div>
+                </div>
+                <div class="canvas-wrap">
+                    <canvas id="preview-canvas"></canvas>
+                    <div id="canvas-empty" class="canvas-empty">选择左侧文件以查看预览</div>
+                    <div id="parse-error-banner" class="parse-banner hidden"></div>
+                </div>
+                <div id="legend" class="legend hidden"></div>
+            </div>
+
+            <div class="resizer" id="resizer-v"></div>
+
+            <div class="yaml-pane">
+                <div class="pane-header">
+                    <span class="pane-title">YAML 文本编辑器</span>
+                    <span class="pane-hint">编辑后点击"应用YAML"以刷新结构与预览</span>
+                </div>
+                <textarea id="yaml-editor" spellcheck="false" placeholder="YAML 内容…"></textarea>
+            </div>
+        </section>
+
+        <!-- 右侧栏: 属性编辑表单 -->
+        <aside class="props">
+            <div class="pane-header">
+                <span class="pane-title">属性编辑</span>
+            </div>
+            <div id="props-body" class="props-body">
+                <div class="props-empty">暂无可编辑属性</div>
+            </div>
+        </aside>
+    </main>
+
+    <!-- 启动排布弹窗 -->
+    <div id="layout-modal" class="modal hidden">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <span class="modal-title">▶ 启动排布</span>
+                <button id="layout-modal-close" class="icon-btn" title="关闭">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <label class="form-item">
+                        <span>模式</span>
+                        <select id="layout-mode">
+                            <option value="recommend">自动推荐 (recommend)</option>
+                            <option value="generate">手动选模块 (generate)</option>
+                        </select>
+                    </label>
+                    <label class="form-item">
+                        <span>安置人数</span>
+                        <input id="layout-evacuees" type="number" min="1" value="60">
+                    </label>
+                    <label class="form-item">
+                        <span>场地长 (m)</span>
+                        <input id="layout-length" type="number" min="1" step="0.1" value="60">
+                    </label>
+                    <label class="form-item">
+                        <span>场地宽 (m)</span>
+                        <input id="layout-width" type="number" min="1" step="0.1" value="40">
+                    </label>
+                    <label class="form-item">
+                        <span>安置天数</span>
+                        <input id="layout-days" type="number" min="1" value="3">
+                    </label>
+                    <label class="form-item" id="layout-strategy-item">
+                        <span>策略</span>
+                        <select id="layout-strategy">
+                            <option value="">自动</option>
+                            <option value="comfort">舒适优先</option>
+                            <option value="economy">经济优先</option>
+                            <option value="balanced">平衡</option>
+                        </select>
+                    </label>
+                    <label class="form-item" id="layout-recmode-item">
+                        <span>排布目标</span>
+                        <select id="layout-recmode">
+                            <option value="match_input">跟人数一致</option>
+                            <option value="fill">排满场地</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div id="layout-modules-section" class="hidden">
+                    <div class="section-title">模块数量 (generate 模式)</div>
+                    <div id="layout-modules-list" class="modules-list"></div>
+                </div>
+
+                <div class="modal-actions">
+                    <button id="btn-layout-run" class="btn btn-primary">运行排布</button>
+                    <span id="layout-run-status" class="status-msg"></span>
+                </div>
+
+                <div id="layout-log" class="layout-log hidden">
+                    <div class="section-title">运行日志</div>
+                    <pre id="layout-log-pre"></pre>
+                </div>
+
+                <div id="layout-result" class="layout-result hidden">
+                    <div class="section-title">排布结果 <span class="hint-dblclick">(双击图片放大查看)</span></div>
+                    <div id="layout-summary" class="layout-summary"></div>
+                    <img id="layout-png" class="layout-png" alt="布局图" title="双击放大查看">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 布局图灯箱(双击放大) -->
+    <div id="layout-lightbox" class="lightbox hidden">
+        <img id="lightbox-img" alt="布局图(放大)">
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

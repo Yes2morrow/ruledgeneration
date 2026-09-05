@@ -1,22 +1,48 @@
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# Output files
-06_output_results/*.png
-06_output_results/*.json
-06_output_results/*.txt
-06_output_results/legacy/
+# Local environments and vendored dependencies
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+.pkgs/
 
-# Analysis exports
-03_visualization/layout_analysis_exports/
+# Credentials and private keys
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*credentials*.json
+*service-account*.json
+*secret*.json
 
-# Test outputs
-04_test/
+# Local/cloud deployment identifiers
+cloudbaserc.json
+cloudrun_deploy_args.json
 
-# Legacy images
-03_visualization/image/legacy/
+# Generated and temporary output
+generated_runs/
+06_output_results/
+tmp_*/
+*.log
 
-# Temp files
-~$*
-*.tmp
+# Project documents and office artifacts
+*.md
+*.pdf
+*.doc
+*.docx
+*.ppt
+*.pptx
+*.xls
+*.xlsx
+
+# Local render/test output
+_render_test.png
+04_test/*_output.png

@@ -1,0 +1,53 @@
+module_id: A
+groups:
+- group_type: A_group_two
+  description: 2行x2列大群组(4模块)
+  rows: 2
+  cols: 2
+  module_count: 4
+  layout_priority: preferred
+  internal_spacing:
+    horizontal_gap_m: 0
+    vertical_gap_m: 0
+  # 群组间外部间距(与任意其它群组), 区分水平/垂直, 支持任意小数(如0.2)
+  external_spacing:
+    horizontal_gap_m: 1.5
+    vertical_gap_m: 1.5
+  arrangement:
+  - {row: 0, col: 0, rotation: 0, mirror: both}
+  - {row: 1, col: 0, rotation: 0, mirror: horizontal}
+  - {row: 0, col: 1, rotation: 0, mirror: vertical}
+  - {row: 1, col: 1, rotation: 0, mirror: none}
+  decompose_to: A_group_one
+- group_type: A_group_one
+  description: 2行x1列组合单元(2模块)
+  rows: 2
+  cols: 1
+  module_count: 2
+  layout_priority: flexible
+  internal_spacing:
+    horizontal_gap_m: 0
+    vertical_gap_m: 0
+  external_spacing:
+    horizontal_gap_m: 1.5
+    vertical_gap_m: 1.5
+  arrangement:
+  - {row: 0, col: 0, rotation: 0, mirror: both}
+  - {row: 1, col: 0, rotation: 0, mirror: horizontal}
+  decompose_to: A_group_three
+- group_type: A_group_three
+  description: 1行x2列组合单元(2模块)
+  rows: 1
+  cols: 2
+  module_count: 2
+  layout_priority: flexible
+  internal_spacing:
+    horizontal_gap_m: 0
+    vertical_gap_m: 0
+  external_spacing:
+    horizontal_gap_m: 1.5
+    vertical_gap_m: 1.5
+  arrangement:
+  - {row: 0, col: 0, rotation: 0, mirror: vertical}
+  - {row: 0, col: 1, rotation: 0, mirror: vertical}
+  decompose_to: null

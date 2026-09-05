@@ -1,0 +1,24 @@
+module_id: C
+groups:
+- group_type: C_pair
+  description: 2行x1列组合单元(2模块)
+  rows: 2
+  cols: 1
+  module_count: 2
+  layout_priority: flexible
+  internal_spacing:
+    horizontal_gap_m: 0
+    vertical_gap_m: 0
+  external_spacing:
+    horizontal_gap_m: 1.2
+    vertical_gap_m: 1
+  arrangement:
+  - row: 0
+    col: 0
+    rotation: 0
+    mirror: none
+  - row: 1
+    col: 0
+    rotation: 0
+    mirror: vertical
+  decompose_to: null

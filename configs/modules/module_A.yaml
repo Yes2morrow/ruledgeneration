@@ -1,0 +1,79 @@
+module_id: A
+name: 模块A
+type: 舒适型
+beds: 3
+cost: 3842
+priority: 1
+dimensions:
+  length_mm: 4600
+  width_mm: 5600
+bed_orientation:
+  head_direction: north
+  head_position_mm: 5600
+road_areas:
+- name: main_aisle
+  description: 模块底部主要通道(占位，待用户手动修改)
+  polygon:
+  - - 1000
+    - 0
+  - - 1000
+    - 2300
+  - - 0
+    - 2300
+  - - 0
+    - 3600
+  - - 4600
+    - 3600
+  - - 4600
+    - 2300
+  - - 2600
+    - 2300
+  - - 2600
+    - 0
+beds_layout:
+- bed_id: 1
+  head_direction: west
+  head_position_mm: 5600
+  polygon:
+  - - 0
+    - 3600
+  - - 2300
+    - 3600
+  - - 2300
+    - 5600
+  - - 0
+    - 5600
+- bed_id: 2
+  head_direction: east
+  head_position_mm: 5600
+  polygon:
+  - - 2300
+    - 3600
+  - - 2300
+    - 5600
+  - - 4600
+    - 5600
+  - - 4600
+    - 3600
+- bed_id: 3
+  head_direction: south
+  head_position_mm: 5600
+  polygon:
+  - - 2600
+    - 0
+  - - 2600
+    - 2300
+  - - 4600
+    - 2300
+  - - 4600
+    - 0
+visual:
+  single_texture: moduleA_single.png   # 模块单体材质(未指定 group 材质时默认使用)
+  textures:
+  - group_type: A_group_one
+    file: moduleA1.png
+  - group_type: A_group_two
+    file: moduleA2.png
+  - group_type: A_group_three
+    file: moduleA3.png
+  color: '#8B0000'

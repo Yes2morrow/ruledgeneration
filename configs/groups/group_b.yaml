@@ -1,0 +1,56 @@
+module_id: B
+groups:
+  # B_quad_cluster: 2行x2列大群组(4模块)
+  - group_type: B_quad_cluster
+    description: 2行x2列大群组(4模块)
+    rows: 2
+    cols: 2
+    module_count: 4
+    layout_priority: preferred    # preferred(优先) / flexible(灵活) / fill(填充)
+    internal_spacing:
+      horizontal_gap_m: 0.0       # 群组内模块间水平间距(米)
+      vertical_gap_m: 0.0         # 群组内模块间垂直间距(米)
+    # 群组间外部间距(与任意其它群组), 区分水平/垂直, 支持任意小数(如0.2)
+    external_spacing:
+      horizontal_gap_m: 1.5
+      vertical_gap_m: 1.5
+    # 坐标系：群组左下角为(0,0)，row从下往上(0,1)，col从左往右(0,1)
+    arrangement:
+      - {row: 0, col: 0, rotation: 0, mirror: none}
+      - {row: 1, col: 0, rotation: 0, mirror: vertical}
+      - {row: 0, col: 1, rotation: 0, mirror: horizontal}
+      - {row: 1, col: 1, rotation: 0, mirror: both}
+    decompose_to: B_row_pair
+
+  - group_type: B_row_pair
+    description: 1行x2列组合单元(2模块)
+    rows: 1
+    cols: 2
+    module_count: 2
+    layout_priority: flexible
+    internal_spacing:
+      horizontal_gap_m: 0.0
+      vertical_gap_m: 0.0
+    external_spacing:
+      horizontal_gap_m: 1.5
+      vertical_gap_m: 1.5
+    arrangement:
+      - {row: 0, col: 0, rotation: 0, mirror: none}
+      - {row: 0, col: 1, rotation: 0, mirror: horizontal}
+    decompose_to: B_single
+
+  - group_type: B_single
+    description: 1行x1列单模块(1模块)
+    rows: 1
+    cols: 1
+    module_count: 1
+    layout_priority: fill
+    internal_spacing:
+      horizontal_gap_m: 0.0
+      vertical_gap_m: 0.0
+    external_spacing:
+      horizontal_gap_m: 1.5
+      vertical_gap_m: 1.5
+    arrangement:
+      - {row: 0, col: 0, rotation: 0, mirror: none}
+    decompose_to: null
