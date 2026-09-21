@@ -136,6 +136,24 @@ def _infer_space_type(selected_modules: Dict[str, int], fallback: str) -> str:
     return max(beds_by_type.items(), key=lambda x: x[1])[0]
 
 
+def summarize_layout(layout: dict, selection_summary: dict) -> dict:
+    """Summarize what actually fits; keep the requested selection separately."""
+    placed = {}
+    for group in layout.get("groups", []):
+        mid = group["module_id"]
+        placed[mid] = placed.get(mid, 0) + len(group.get("modules", []))
+    summary = summarize_selection(placed, selection_summary["targetBeds"])
+    beds = len(layout.get("beds", []))
+    summary.update(
+        totalBeds=beds,
+        bedGap=beds - summary["targetBeds"],
+        isEnough=beds >= summary["targetBeds"],
+        unplacedBeds=max(0, selection_summary["totalBeds"] - beds),
+        unplacedQuantity=max(0, selection_summary["totalQuantity"] - summary["totalQuantity"]),
+    )
+    return summary
+
+
 def _noop(msg: str) -> None:
     pass
 
@@ -247,7 +265,8 @@ def generate_plan_payload(
         "spaceType": space_type,
         "recommendationProfile": profile,
         "selectedModules": selected,
-        "summary": summary,
+        "selectionSummary": summary,
+        "summary": summarize_layout(layout, summary),
         "layout": layout,
     }
 
@@ -320,7 +339,8 @@ def generate_recommendation_payload(
         "spaceType": space_type,
         "recommendationProfile": profile,
         "selectedModules": selected,
-        "summary": summary,
+        "selectionSummary": summary,
+        "summary": summarize_layout(layout, summary),
         "selectionIssues": issues,
         "layout": layout,
     }

@@ -1,0 +1,17 @@
+0.2.1
+
+Fixes
+- Report placed beds, modules and cost from the actual layout; retain requested
+  totals in selectionSummary and report unplaced beds/modules explicitly.
+- Render one single-module texture for each placed module. Extract A's original
+  single module from its atlas; do not stretch B's two-bed artwork over a group.
+- Rotate textures clockwise to match placement geometry and honor module mirrors.
+- Draw bed geometry when artwork is absent. Serialize Matplotlib rendering to
+  prevent concurrent requests from sharing figure/style state.
+
+Validation
+- python 04_test/test_plan_consistency.py: 6 regression tests.
+- python 04_test/test_cli_modes.py: 3 existing end-to-end cases.
+- 100-bed selection (A26/B4/C2/D4): 20x30 m places 62 beds and reports 38 unplaced;
+  30x45 m places all 100 beds in 36 modules. B4 renders all 8 beds.
+- Generated images inspected locally. No cloud deployment performed.

@@ -56,11 +56,12 @@ def build_text_summary(payload: dict) -> str:
 
     return (
         f"{strategy.get('label') or '自动推荐'} · {payload.get('spaceType') or '未标注'}\n"
-        f"目标 {summary.get('targetBeds', 0)} 床，当前 {summary.get('totalBeds', 0)} 床，"
+        f"目标 {summary.get('targetBeds', 0)} 床，实际放置 {summary.get('totalBeds', 0)} 床，"
         f"共 {summary.get('totalQuantity', 0)} 个模块、{summary.get('totalTypes', 0)} 类模块。\n"
         f"占地率 {metrics.get('utilization', 0)}%，"
         f"已用 {round(used, 2)} ㎡ / 场地 {round(site, 2)} ㎡。\n"
-        f"总成本 {summary.get('totalCost', 0)}。"
+        f"已放置模块成本 {summary.get('totalCost', 0)}。\n"
+        f"未放置 {summary.get('unplacedQuantity', 0)} 个模块、{summary.get('unplacedBeds', 0)} 床。"
     )
 
 
@@ -79,8 +80,8 @@ def to_v1_contract(payload: dict, catalog: List[dict], public_files: Dict[str, s
     site = float(metrics.get("site_area_m2", 0) or 0)
 
     layout["groupCount"] = len(layout.get("groups", []))
-    layout["totalBeds"] = int(metrics.get("total_beds", summary.get("totalBeds", 0)) or 0)
-    layout["totalCost"] = int(summary.get("totalCost", 0) or 0) or sum(i["cost"] for i in cart_items)
+    layout["totalBeds"] = len(layout["beds"]) if "beds" in layout else int(metrics.get("total_beds", 0) or 0)
+    layout["totalCost"] = int(summary.get("totalCost", 0) or 0)
     layout["layoutMetrics"] = {
         "usageRatio": f"{metrics.get('utilization', 0)}%",
         "remainingArea": round(site - used, 2),
@@ -101,7 +102,7 @@ def to_v1_contract(payload: dict, catalog: List[dict], public_files: Dict[str, s
         "recommendationMode": payload.get("recommendationMode", "match_input"),
         "selectedModules": selected,
         "cartItems": cart_items,
-        "summary": summary,
+        "summary": payload.get("selectionSummary") or summary,
         "selectionIssues": payload.get("selectionIssues", []),
     }
 
@@ -113,6 +114,7 @@ def to_v1_contract(payload: dict, catalog: List[dict], public_files: Dict[str, s
         "recommendation": recommendation,
         "cartItems": cart_items,
         "summary": summary,
+        "selectionSummary": payload.get("selectionSummary") or summary,
         "layout": layout,
         "outputFiles": layout["outputFiles"],
         "textSummary": build_text_summary(payload),

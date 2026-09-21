@@ -93,6 +93,25 @@ class TextureHandler:
                 return self.images[name]
         return None
 
+    def get_module_texture(self, module: PlacedModule) -> Optional[np.ndarray]:
+        """Return one module only; never stretch a single texture across a group.
+
+        A's legacy atlas contains four modules. Its upper-right quadrant is the
+        unmirrored module (matching A_group_two's row=1, col=1 arrangement).
+        Other atlases must not be used as a fallback for a missing single.
+        """
+        visual = (module.config or {}).get("visual") or {}
+        filename = visual.get("single_texture", "")
+        image = self._try_filenames(filename, filename.replace("_", ""))
+        if image is not None:
+            return image
+        if module.module_id == "A":
+            atlas = self._try_filenames("moduleA2.png")
+            if atlas is not None:
+                height, width = atlas.shape[:2]
+                return atlas[:height // 2, width // 2:]
+        return None
+
     def get_group_texture(self, group: PlacedGroup) -> Optional[Tuple[np.ndarray, bool]]:
         """获取群组贴图及是否需要旋转。
 
@@ -183,13 +202,14 @@ class TextureHandler:
             img = np.flipud(img)
         if rotated:
             # 组整体顺时针旋转 90 度时, 贴图也顺时针旋转 90 度
-            img = np.rot90(img, k=1)
+            img = np.rot90(img, k=-1)
         ax.imshow(
             img,
             extent=[x, x + width, y, y + height],
             aspect="auto",
             alpha=alpha,
             interpolation="nearest",
+            origin="upper",
             zorder=2,
         )
 
@@ -198,6 +218,8 @@ class TextureHandler:
 # 原实现每次 render_layout 都 new TextureHandler(), 每请求重复读取 16 张 PNG 约 0.27s。
 _TEXTURE_CACHE: Optional["TextureHandler"] = None
 _TEXTURE_LOCK = threading.Lock()
+# pyplot and rc_context share process-wide state, including the current figure.
+_RENDER_LOCK = threading.Lock()
 
 
 def get_texture_handler() -> "TextureHandler":
@@ -354,26 +376,24 @@ def _render_layout_inner(
         mod_color = _module_color(g.modules[0]) if g.modules else "#444444"
 
         # 贴图
-        tex_image, _ = texture_handler.get_group_texture(g)
-        if tex_image is not None:
-            if _group_texture_keys(g.module_id, g.group_type):
-                # 组合贴图: 整张 group 贴一张图
+        for m in g.modules:
+            tex_image = texture_handler.get_module_texture(m)
+            if tex_image is not None:
                 texture_handler.apply_texture(
-                    ax, g.x, g.y, g.length_m, g.width_m, tex_image, rotated=g.rotated
+                    ax, m.x, m.y, m.occ_length_m, m.occ_width_m,
+                    tex_image, rotated=m.rotation == 90, mirror=m.mirror,
                 )
-            else:
-                # 单体贴图: 每个模块单独贴图, 并应用模块级 mirror
-                for m in g.modules:
-                    texture_handler.apply_texture(
-                        ax,
-                        m.x,
-                        m.y,
-                        m.occ_length_m,
-                        m.occ_width_m,
-                        tex_image,
-                        rotated=g.rotated,
-                        mirror=m.mirror,
+            elif not show_structure:
+                # Missing artwork must not silently hide real beds.
+                from geometry import transform_module_polygon
+                for bed in m.config.get("beds_layout", []):
+                    polygon, _ = transform_module_polygon(
+                        bed["polygon"], m.length_mm, m.width_mm, m.mirror, m.rotation
                     )
+                    ax.add_patch(MplPolygon(
+                        [(m.x + x / 1000, m.y + y / 1000) for x, y in polygon],
+                        closed=True, facecolor="white", edgecolor="black", linewidth=0.8,
+                    ))
 
         if show_structure:
             # 群组大框
@@ -485,7 +505,7 @@ def render_layout(
 
     字体配置通过 rc_context 局部生效, 不污染进程级 rcParams。
     """
-    with rc_context(_CJK_FONT_RC):
+    with _RENDER_LOCK, rc_context(_CJK_FONT_RC):
         return _render_layout_inner(
             result, output_path,
             show_labels=show_labels,
