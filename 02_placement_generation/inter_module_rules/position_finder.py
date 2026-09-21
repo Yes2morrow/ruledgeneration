@@ -1,10 +1,10 @@
 """位置寻找器 - 在场地多边形内为群组寻找最佳放置位置。
 
 统一逻辑(替代原项目按模块类型特化的 finder):
-  1. 完全配置驱动: 群组间距查 external_spacing (区分水平/垂直), 缺失回退 1.5m,
+  1. 完全配置驱动: 群组间距查 external_spacing (区分水平/垂直), 缺失回退 0m,
      不再硬编码 A=2.0/C=1.5。
   2. 场地为任意多边形(支持矩形退化), 用 rect_in_polygon 做边界检查。
-  3. 候选生成: 原点 + 已放置群组的右侧/上方/右上角 + 网格搜索。
+  3. 候选生成: 场地边界接触点 + 已放置群组边缘/间距 + 网格搜索。
   4. 打分: 少旋转 > 高网格度(对齐边+正确间距邻居) > 小 footprint > 左下优先。
   5. 群组间距取双方对应方向间距的最大值, 满足各自要求。
 """
@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import os
 import sys
+from bisect import bisect_left
+import numpy as np
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -24,9 +26,11 @@ from geometry import (  # noqa: E402
     Polygon,
     rect_in_polygon,
     rects_violate_spacing,
+    group_grid_geometry,
+    polygon_bbox,
 )
 
-# 用于网格搜索的候选去重容差(米)
+# 仅用于布局对齐评分的容差(米)，不用于几何包含判断或候选去重。
 _EPS = 0.05
 
 # 紧凑度权重：越大越优先选择方形/紧凑布局，减少长条形排列。
@@ -43,33 +47,24 @@ def calculate_group_size(group_def: dict, module_config: dict, rotated: bool) ->
 
     rotated=True 时组整体顺时针旋转 90 度, length 与 width 互换。
     """
-    mod_l = module_config["dimensions"]["length_mm"] / 1000.0
-    mod_w = module_config["dimensions"]["width_mm"] / 1000.0
-    rows = group_def.get("rows", 1)
-    cols = group_def.get("cols", 1)
-    internal = group_def.get("internal_spacing", {}) or {}
-    h_gap = float(internal.get("horizontal_gap_m", 0.0))
-    v_gap = float(internal.get("vertical_gap_m", 0.0))
-
-    length_m = cols * mod_l + max(0, cols - 1) * h_gap
-    width_m = rows * mod_w + max(0, rows - 1) * v_gap
+    _, (length_m, width_m) = group_grid_geometry(group_def, module_config)
     if rotated:
         return width_m, length_m
     return length_m, width_m
 
 
 def _axis_spacing(group_def: dict, field: str = "external_spacing") -> Tuple[float, float]:
-    """从 group_def 取指定间距字段的 (水平, 垂直) 间距, 缺失轴回退 1.5m。"""
+    """从 group_def 取指定间距字段的 (水平, 垂直) 间距, 缺失轴回退 0m。"""
     sp = group_def.get(field) or {}
     if not isinstance(sp, dict):
-        return 1.5, 1.5
-    return float(sp.get("horizontal_gap_m", 1.5)), float(sp.get("vertical_gap_m", 1.5))
+        return 0.0, 0.0
+    return float(sp.get("horizontal_gap_m", 0.0)), float(sp.get("vertical_gap_m", 0.0))
 
 
 def _pair_spacing(group_a: dict, group_b: dict) -> Tuple[float, float]:
     """两个群组间的最小轴对齐间距 (水平, 垂直), 取双方对应方向最大值。
 
-    每方从 external_spacing (区分x/y) 取值, 缺失回退 1.5m。
+    每方从 external_spacing (区分x/y) 取值, 缺失回退 0m。
     """
     ax, ay = _axis_spacing(group_a)
     bx, by = _axis_spacing(group_b)
@@ -107,7 +102,7 @@ def _generate_candidates(
 ) -> List[Point]:
     """生成候选放置位置 (x, y)。
 
-    来源: 原点 + 已放置群组右侧/上方/右上角(用与该群组的实际间距) + 已放置边界网格。
+    来源: 场地顶点及斜边接触点 + 已放置群组边缘及间距偏移 + 边界网格。
     与每个已放置群组的间距取双方对应方向最大值(水平/垂直分离)。
     """
     candidates: List[Point] = [(0.0, 0.0)]
@@ -125,17 +120,49 @@ def _generate_candidates(
         candidates.append((0.0, py + ph + sy))
 
     # 网格: 用已放置群组的 x/y 边界值组合(含间距偏移, 提高命中率)
-    xs = {0.0}
-    ys = {0.0}
+    xs = {x - offset for x, _ in site_polygon for offset in (0, group_w)}
+    ys = {y - offset for _, y in site_polygon for offset in (0, group_h)}
     for p in placed:
         sx, sy = _pair_spacing(group_def, getattr(p, "_group_def", group_def))
         px, py, pw, ph = p.rect
         xs.add(px)
         xs.add(px + pw)
         xs.add(px + pw + sx)
+        xs.update((px - group_w - sx, px + pw - group_w))
         ys.add(py)
         ys.add(py + ph)
         ys.add(py + ph + sy)
+        ys.update((py - group_h - sy, py + ph - group_h))
+
+    # Boundary-contact candidates, including sloping edges and shifted sites.
+    # Translate site edges by each rectangle corner; their intersections are
+    # lower-left positions with two simultaneous boundary contacts.
+    edges = []
+    for a, b in zip(site_polygon, site_polygon[1:] + site_polygon[:1]):
+        for ox, oy in [(0, 0), (group_w, 0), (0, group_h), (group_w, group_h)]:
+            edges.append(((a[0] - ox, a[1] - oy), (b[0] - ox, b[1] - oy)))
+    for i, (a, b) in enumerate(edges):
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        if abs(dx) > 1e-12:
+            for x in xs:
+                t = (x - a[0]) / dx
+                if 0 <= t <= 1:
+                    candidates.append((x, a[1] + t * dy))
+        if abs(dy) > 1e-12:
+            for y in ys:
+                t = (y - a[1]) / dy
+                if 0 <= t <= 1:
+                    candidates.append((a[0] + t * dx, y))
+        for c, d in edges[i + 1:]:
+            ex, ey = d[0] - c[0], d[1] - c[1]
+            cross = dx * ey - dy * ex
+            if abs(cross) < 1e-12:
+                continue
+            qx, qy = c[0] - a[0], c[1] - a[1]
+            t = (qx * ey - qy * ex) / cross
+            u = (qx * dy - qy * dx) / cross
+            if -1e-9 <= t <= 1 + 1e-9 and -1e-9 <= u <= 1 + 1e-9:
+                candidates.append((a[0] + t * dx, a[1] + t * dy))
 
     for x in sorted(xs):
         for y in sorted(ys):
@@ -145,7 +172,7 @@ def _generate_candidates(
     unique: List[Point] = []
     seen = set()
     for x, y in candidates:
-        key = (round(x / _EPS), round(y / _EPS))
+        key = (round(x, 9), round(y, 9))
         if key in seen:
             continue
         seen.add(key)
@@ -183,6 +210,7 @@ def _grid_score(
     candidate: Tuple[float, float, bool, float, float],
     placed: List,
     group_def: dict,
+    context=None,
 ) -> int:
     """网格度 = 对齐边数 + 正确间距邻居数。
 
@@ -193,7 +221,7 @@ def _grid_score(
               (跨行也算), 每条 +1。奖励行列对齐形成规整网格。
     - 正确间距邻居: 候选按 external_spacing(sx/sy) 紧邻某已放置群组
                     (留了规矩间距且投影重叠), 每个邻居 +2。比单纯对齐
-                    更宝贵, 它保证道路宽度正确、路口贯通。
+                    更宝贵。此项只奖励排列规整，通路由独立连通检查保证。
     """
     x, y, rotated, w, h = candidate
     score = 0
@@ -206,6 +234,14 @@ def _grid_score(
         (y + h, False), # 上边 y
     ]
     for value, is_x in candidate_edges:
+        if context is not None:
+            edges = context[0] if is_x else context[1]
+            index = bisect_left(edges, value - _EPS)
+            if index < len(edges) and abs(edges[index] - value) < _EPS:
+                score += 1
+            elif index + 1 < len(edges) and abs(edges[index + 1] - value) < _EPS:
+                score += 1
+            continue
         for p in placed:
             px, py, pw, ph = p.rect
             placed_edges = {px, px + pw} if is_x else {py, py + ph}
@@ -214,8 +250,8 @@ def _grid_score(
                 break
 
     # 正确间距邻居(原 adjacency 重定义: 零间距 -> 规矩间距)
-    for p in placed:
-        sx, sy = _pair_spacing(group_def, getattr(p, "_group_def", group_def))
+    for index, p in enumerate(placed):
+        sx, sy = context[2][index] if context is not None else _pair_spacing(group_def, getattr(p, "_group_def", group_def))
         px, py, pw, ph = p.rect
         y_overlap = not (y + h <= py + _EPS or y >= py + ph - _EPS)
         x_overlap = not (x + w <= px + _EPS or x >= px + pw - _EPS)
@@ -239,6 +275,7 @@ def _score(
     placed: List,
     site_polygon: Polygon,
     group_def: dict,
+    context=None,
 ) -> tuple:
     """候选位置打分, 越小越优。
 
@@ -251,11 +288,13 @@ def _score(
     rot_penalty = 1 if rotated else 0
 
     # 网格度(对齐边 + 正确间距邻居)
-    grid = _grid_score(candidate, placed, group_def)
+    grid = _grid_score(candidate, placed, group_def, context)
 
     # footprint: 布局外接矩形面积(希望紧凑)
-    max_x = max([x + w] + [p.rect[0] + p.rect[2] for p in placed] + [0.0])
-    max_y = max([y + h] + [p.rect[1] + p.rect[3] for p in placed] + [0.0])
+    max_x = max([x + w] + [p.rect[0] + p.rect[2] for p in placed])
+    max_y = max([y + h] + [p.rect[1] + p.rect[3] for p in placed])
+    max_x -= min([x] + [p.rect[0] for p in placed])
+    max_y -= min([y] + [p.rect[1] for p in placed])
     footprint = max_x * max_y
 
     # 长宽比惩罚：越细长代价越高，优先接近方形
@@ -280,6 +319,7 @@ def find_best_position(
     module_config: dict,
     placed: List,
     site_polygon: Polygon,
+    candidate_validator=None,
 ) -> Optional[Tuple[float, float, bool, float, float]]:
     """为群组寻找最佳放置位置。
 
@@ -290,21 +330,48 @@ def find_best_position(
     rotated_w, rotated_h = calculate_group_size(group_def, module_config, rotated=True)
 
     candidates: List[Tuple[float, float, bool, float, float]] = []
+    # Prepare shared obstacle and scoring data once, rather than parsing group
+    # dictionaries and scanning edge sets for every candidate.
+    rects = np.asarray([p.rect for p in placed], dtype=float).reshape(-1, 4)
+    spacings = np.asarray([_pair_spacing(group_def, getattr(p, '_group_def', group_def))
+                           for p in placed], dtype=float).reshape(-1, 2)
+    ends = rects[:, :2] + rects[:, 2:]
+    context = (sorted({v for p in placed for v in (p.rect[0], p.rect[0]+p.rect[2])}),
+               sorted({v for p in placed for v in (p.rect[1], p.rect[1]+p.rect[3])}), spacings)
+    minx, miny, maxx, maxy = polygon_bbox(site_polygon)
+    rectangle_site = set(site_polygon) == {(minx,miny),(maxx,miny),(maxx,maxy),(minx,maxy)}
+
+    def fits(rect):
+        x, y, w, h = rect
+        if rectangle_site:
+            if x < minx-1e-9 or y < miny-1e-9 or x+w > maxx+1e-9 or y+h > maxy+1e-9:
+                return False
+        elif not rect_in_polygon(rect, site_polygon):
+            return False
+        gaps_x = np.maximum(x, rects[:,0]) - np.minimum(x+w, ends[:,0])
+        gaps_y = np.maximum(y, rects[:,1]) - np.minimum(y+h, ends[:,1])
+        return not np.any((gaps_x < spacings[:,0]-1e-9) & (gaps_y < spacings[:,1]-1e-9))
 
     # 正常方向候选
     for x, y in _generate_candidates(placed, site_polygon, normal_w, normal_h, group_def):
         rect = (x, y, normal_w, normal_h)
-        if can_place(rect, placed, site_polygon, group_def):
+        if fits(rect):
             candidates.append((x, y, False, normal_w, normal_h))
 
     # 旋转方向候选
     for x, y in _generate_candidates(placed, site_polygon, rotated_w, rotated_h, group_def):
         rect = (x, y, rotated_w, rotated_h)
-        if can_place(rect, placed, site_polygon, group_def):
+        if fits(rect):
             candidates.append((x, y, True, rotated_w, rotated_h))
 
     if not candidates:
         return None
 
-    best = min(candidates, key=lambda c: _score(c, placed, site_polygon, group_def))
-    return best
+    if candidate_validator is None:
+        return min(candidates, key=lambda c: _score(c, placed, site_polygon, group_def, context))
+    # Connectivity is more expensive than rectangle tests. Evaluate in preference
+    # order and stop at the first valid candidate, preserving the scoring policy.
+    for candidate in sorted(candidates, key=lambda c: _score(c, placed, site_polygon, group_def, context)):
+        if candidate_validator(candidate):
+            return candidate
+    return None

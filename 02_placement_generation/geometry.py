@@ -39,8 +39,14 @@ def point_in_polygon(point: Point, polygon: Polygon) -> bool:
     for i in range(n):
         xi, yi = polygon[i]
         xj, yj = polygon[j]
+        # Distance to the segment, including vertices and zero-length closing edges.
+        dx, dy = xj - xi, yj - yi
+        if (min(xi, xj) - 1e-9 <= x <= max(xi, xj) + 1e-9 and
+                min(yi, yj) - 1e-9 <= y <= max(yi, yj) + 1e-9 and
+                abs(dx * (y - yi) - dy * (x - xi)) <= 1e-9 * math.hypot(dx, dy)):
+            return True
         if ((yi > y) != (yj > y)) and (
-            x < (xj - xi) * (y - yi) / (yj - yi + 1e-12) + xi
+            x < (xj - xi) * (y - yi) / (yj - yi) + xi
         ):
             inside = not inside
         j = i
@@ -117,10 +123,71 @@ def rects_violate_spacing(
 def rect_in_polygon(
     rect: Tuple[float, float, float, float], polygon: Polygon
 ) -> bool:
-    """轴对齐矩形是否完全落在多边形内(四个角点都在多边形内)。"""
+    """检查整个矩形包含于简单场地多边形内，允许贴边，拒绝跨越凹口。"""
     x, y, w, h = rect
+    if w <= 0 or h <= 0 or len(polygon) < 3:
+        return False
     corners = [(x, y), (x + w, y), (x + w, y + h), (x, y + h)]
-    return all(point_in_polygon(c, polygon) for c in corners)
+    if not all(point_in_polygon(c, polygon) for c in corners):
+        return False
+    # Four corners can all be on notch walls while the rectangle is outside.
+    if not point_in_polygon((x + w / 2, y + h / 2), polygon):
+        return False
+    # A concave boundary must not enter the rectangle's open interior.
+    # Clip each segment to the rectangle; an interior midpoint proves intrusion.
+    for start, end in zip(polygon, polygon[1:] + polygon[:1]):
+        low, high = 0.0, 1.0
+        for a, b, lo, hi in [(start[0], end[0], x, x + w), (start[1], end[1], y, y + h)]:
+            delta = b - a
+            if abs(delta) < 1e-12:
+                if a < lo or a > hi:
+                    high = -1.0
+                    break
+            else:
+                t0, t1 = sorted(((lo - a) / delta, (hi - a) / delta))
+                low, high = max(low, t0), min(high, t1)
+        if low <= high:
+            t = (low + high) / 2
+            px = start[0] + t * (end[0] - start[0])
+            py = start[1] + t * (end[1] - start[1])
+            if x + 1e-9 < px < x + w - 1e-9 and y + 1e-9 < py < y + h - 1e-9:
+                return False
+    return True
+
+
+def normalize_rotation(rotation) -> int:
+    """Clockwise quarter turns only; reject unsupported angles instead of distorting geometry."""
+    angle = float(rotation or 0)
+    if not math.isfinite(angle) or angle % 90 != 0:
+        raise ValueError("模块 rotation 必须为 90 度的整数倍")
+    return int(angle) % 360
+
+
+def group_grid_geometry(group_def: dict, module_config: dict):
+    """Return grid offsets/occupied sizes (metres) and total size, accounting for each rotation."""
+    length = float(module_config['dimensions']['length_mm']) / 1000
+    width = float(module_config['dimensions']['width_mm']) / 1000
+    rows, cols = int(group_def.get('rows', 1)), int(group_def.get('cols', 1))
+    internal = group_def.get('internal_spacing') or {}
+    hg = float(internal.get('horizontal_gap_m', 0))
+    vg = float(internal.get('vertical_gap_m', 0))
+    col_widths, row_heights = [0.0] * cols, [0.0] * rows
+    entries = []
+    for entry in group_def.get('arrangement') or []:
+        row, col = int(entry.get('row', 0)), int(entry.get('col', 0))
+        if not (0 <= row < rows and 0 <= col < cols):
+            raise ValueError('arrangement 行列超出群组网格')
+        l, w = (width, length) if normalize_rotation(entry.get('rotation')) % 180 else (length, width)
+        col_widths[col] = max(col_widths[col], l)
+        row_heights[row] = max(row_heights[row], w)
+        entries.append((entry, row, col, l, w))
+    col_widths = [v or length for v in col_widths]
+    row_heights = [v or width for v in row_heights]
+    xs = [sum(col_widths[:c]) + c * hg for c in range(cols)]
+    ys = [sum(row_heights[:r]) + r * vg for r in range(rows)]
+    cells = [(entry, xs[c], ys[r], l, w) for entry, r, c, l, w in entries]
+    return cells, (sum(col_widths) + max(0, cols - 1) * hg,
+                   sum(row_heights) + max(0, rows - 1) * vg)
 
 
 # --------------------------------------------------------------------------- #
@@ -139,7 +206,7 @@ def transform_direction(direction: str, mirror: str, rotation: int) -> str:
     """变换床头朝向。
 
     mirror: none/vertical(上下镜像, y翻转)/horizontal(左右镜像, x翻转)/both
-    rotation: 0 或 90 (顺时针)。
+    rotation: 0/90/180/270 (顺时针)。
     """
     v = _DIR_VECTORS.get(direction)
     if v is None:
@@ -150,7 +217,7 @@ def transform_direction(direction: str, mirror: str, rotation: int) -> str:
         vy = -vy
     if m in ("horizontal", "both"):
         vx = -vx
-    if rotation in (90, 90.0):
+    for _ in range(normalize_rotation(rotation) // 90):
         # 顺时针 90 度: (vx, vy) -> (vy, -vx)
         vx, vy = vy, -vx
     return _INV_VECTORS.get((vx, vy), direction)
@@ -177,10 +244,10 @@ def transform_module_polygon(
         pts = [(x, width_mm - y) for x, y in pts]
     if m in ("horizontal", "both"):
         pts = [(length_mm - x, y) for x, y in pts]
-    if rotation in (90, 90.0):
+    for _ in range(normalize_rotation(rotation) // 90):
         # 顺时针 90: (x,y) -> (y, L - x), 新尺寸 W×L
         pts = [(y, length_mm - x) for x, y in pts]
-        return pts, (width_mm, length_mm)
+        length_mm, width_mm = width_mm, length_mm
     return pts, (length_mm, width_mm)
 
 
@@ -257,7 +324,8 @@ class RoadArea:
 
     name: str
     polygon_m: Polygon
-    source: str  # "module" | "internal_gap" | "external_gap"
+    source: str  # "module" | "internal_gap" | "walkable" | "isolated_open_area"
+    holes_m: List[Polygon] = field(default_factory=list)
 
 
 @dataclass

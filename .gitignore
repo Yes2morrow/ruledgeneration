@@ -35,6 +35,7 @@ tmp_*/
 
 # Project documents and office artifacts
 *.md
+!docs/release-*.md
 *.pdf
 *.doc
 *.docx

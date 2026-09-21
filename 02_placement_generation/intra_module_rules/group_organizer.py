@@ -17,6 +17,11 @@ from typing import List, Optional
 
 # 注入 01_pre_selection 路径以导入 config_loader
 _PROJ_ROOT = Path(__file__).resolve().parents[2]
+_PLACEMENT = _PROJ_ROOT / "02_placement_generation"
+if str(_PLACEMENT) not in sys.path:
+    sys.path.insert(0, str(_PLACEMENT))
+from geometry import group_grid_geometry  # noqa: E402
+
 _PRE_SEL = _PROJ_ROOT / "01_pre_selection"
 if str(_PRE_SEL) not in sys.path:
     sys.path.insert(0, str(_PRE_SEL))
@@ -143,17 +148,4 @@ def estimate_group_footprint(group_def: dict, module_config: dict) -> tuple:
     用于 organize 阶段快速判断可行性, 精确尺寸在 layout 阶段计算。
     返回 (length_m, width_m)。
     """
-    length_mm = module_config["dimensions"]["length_mm"]
-    width_mm = module_config["dimensions"]["width_mm"]
-    mod_l = length_mm / 1000.0
-    mod_w = width_mm / 1000.0
-
-    rows = group_def.get("rows", 1)
-    cols = group_def.get("cols", 1)
-    internal = group_def.get("internal_spacing", {}) or {}
-    h_gap = float(internal.get("horizontal_gap_m", 0.0))
-    v_gap = float(internal.get("vertical_gap_m", 0.0))
-
-    length_m = cols * mod_l + max(0, cols - 1) * h_gap
-    width_m = rows * mod_w + max(0, rows - 1) * v_gap
-    return length_m, width_m
+    return group_grid_geometry(group_def, module_config)[1]

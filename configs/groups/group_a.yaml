@@ -11,8 +11,8 @@ groups:
     vertical_gap_m: 0
   # 群组间外部间距(与任意其它群组), 区分水平/垂直, 支持任意小数(如0.2)
   external_spacing:
-    horizontal_gap_m: 1.5
-    vertical_gap_m: 1.5
+    horizontal_gap_m: 0
+    vertical_gap_m: 0
   arrangement:
   - {row: 0, col: 0, rotation: 0, mirror: both}
   - {row: 1, col: 0, rotation: 0, mirror: horizontal}
@@ -29,8 +29,8 @@ groups:
     horizontal_gap_m: 0
     vertical_gap_m: 0
   external_spacing:
-    horizontal_gap_m: 1.5
-    vertical_gap_m: 1.5
+    horizontal_gap_m: 0
+    vertical_gap_m: 0
   arrangement:
   - {row: 0, col: 0, rotation: 0, mirror: both}
   - {row: 1, col: 0, rotation: 0, mirror: horizontal}
@@ -45,8 +45,8 @@ groups:
     horizontal_gap_m: 0
     vertical_gap_m: 0
   external_spacing:
-    horizontal_gap_m: 1.5
-    vertical_gap_m: 1.5
+    horizontal_gap_m: 0
+    vertical_gap_m: 0
   arrangement:
   - {row: 0, col: 0, rotation: 0, mirror: vertical}
   - {row: 0, col: 1, rotation: 0, mirror: vertical}

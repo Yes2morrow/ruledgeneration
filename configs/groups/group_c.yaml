@@ -10,8 +10,8 @@ groups:
     horizontal_gap_m: 0
     vertical_gap_m: 0
   external_spacing:
-    horizontal_gap_m: 1.2
-    vertical_gap_m: 1
+    horizontal_gap_m: 0
+    vertical_gap_m: 0
   arrangement:
   - row: 0
     col: 0

@@ -12,8 +12,8 @@ groups:
       vertical_gap_m: 0.0         # 群组内模块间垂直间距(米)
     # 群组间外部间距(与任意其它群组), 区分水平/垂直, 支持任意小数(如0.2)
     external_spacing:
-      horizontal_gap_m: 1.5
-      vertical_gap_m: 1.5
+      horizontal_gap_m: 0
+      vertical_gap_m: 0
     # 坐标系：群组左下角为(0,0)，row从下往上(0,1)，col从左往右(0,1)
     arrangement:
       - {row: 0, col: 0, rotation: 0, mirror: none}
@@ -32,8 +32,8 @@ groups:
       horizontal_gap_m: 0.0
       vertical_gap_m: 0.0
     external_spacing:
-      horizontal_gap_m: 1.5
-      vertical_gap_m: 1.5
+      horizontal_gap_m: 0
+      vertical_gap_m: 0
     arrangement:
       - {row: 0, col: 0, rotation: 0, mirror: none}
       - {row: 0, col: 1, rotation: 0, mirror: horizontal}
@@ -49,8 +49,8 @@ groups:
       horizontal_gap_m: 0.0
       vertical_gap_m: 0.0
     external_spacing:
-      horizontal_gap_m: 1.5
-      vertical_gap_m: 1.5
+      horizontal_gap_m: 0
+      vertical_gap_m: 0
     arrangement:
       - {row: 0, col: 0, rotation: 0, mirror: none}
     decompose_to: null

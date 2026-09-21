@@ -1,0 +1,48 @@
+{
+  "python": "3.12.7",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "repeats": 3,
+  "cases": [
+    {
+      "case": "blocked_64",
+      "requested_beds": 64,
+      "without_candidate_checks_s": 0.0701,
+      "checked_s": 0.1146,
+      "render_s": 0.223,
+      "actual_beds": 64,
+      "blocked": 0,
+      "checked_candidates": 18
+    },
+    {
+      "case": "mixed_100",
+      "requested_beds": 100,
+      "without_candidate_checks_s": 0.0562,
+      "checked_s": 0.0741,
+      "render_s": 0.1516,
+      "actual_beds": 100,
+      "blocked": 0,
+      "checked_candidates": 10
+    },
+    {
+      "case": "B_300",
+      "requested_beds": 300,
+      "without_candidate_checks_s": 0.1963,
+      "checked_s": 0.5617,
+      "render_s": 0.5951,
+      "actual_beds": 300,
+      "blocked": 0,
+      "checked_candidates": 38
+    },
+    {
+      "case": "G_300",
+      "requested_beds": 300,
+      "without_candidate_checks_s": 1.8894,
+      "checked_s": 3.1931,
+      "render_s": 1.6809,
+      "actual_beds": 300,
+      "blocked": 0,
+      "checked_candidates": 75
+    }
+  ]
+}

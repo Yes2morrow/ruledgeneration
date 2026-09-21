@@ -3,6 +3,7 @@ import sys
 import tempfile
 import unittest
 import hashlib
+import copy
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
@@ -11,14 +12,30 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / '05_config_and_tools')]
 from service_adapter import generate_plan_payload
 from cloudrun_app.contract import to_v1_contract
-from config_loader import get_module_catalog, get_site_polygon
-from layout_optimizer import calculate_layout
+from config_loader import get_module_catalog, get_site_polygon, load_module_config, get_group_defs
+from layout_optimizer import calculate_layout, _build_group_contents
 import renderer
 import numpy as np
 import matplotlib.pyplot as plt
 
 
 class PlanConsistencyTests(unittest.TestCase):
+    def test_g_bed_four_faces_its_south_pillow_after_transforms(self):
+        config = load_module_config('G')
+        for mirror, normal, rotated in [
+            ('none', 'south', 'west'), ('horizontal', 'south', 'west'),
+            ('vertical', 'north', 'east'), ('both', 'north', 'east'),
+        ]:
+            for is_rotated, expected in [(False, normal), (True, rotated)]:
+                with self.subTest(mirror=mirror, rotated=is_rotated):
+                    group = copy.deepcopy(get_group_defs('G')[0])
+                    group['module_id'] = 'G'
+                    group['arrangement'][0]['mirror'] = mirror
+                    modules, beds, roads = [], [], []
+                    _build_group_contents(group, config, 0, 0, is_rotated, modules, beds, roads)
+                    self.assertEqual(len(beds), 4)
+                    self.assertEqual(next(b for b in beds if b.bed_id == 4).head_direction, expected)
+
     def test_full_100_bed_plan_counts_match(self):
         with tempfile.TemporaryDirectory() as out:
             payload = generate_plan_payload(
@@ -82,6 +99,30 @@ class PlanConsistencyTests(unittest.TestCase):
             renderer.render_layout(result, 'unused.png', show_structure=False)
         self.assertEqual(len(saved[0].axes[0].images), 0)
         self.assertEqual(len(saved[0].axes[0].patches), 1 + len(result.beds))
+
+    def test_render_uses_each_module_full_rotation(self):
+        result = calculate_layout({'B': 1}, get_site_polygon(length_m=10, width_m=10))
+        handler = renderer.TextureHandler()
+        source = np.arange(18).reshape(2, 3, 3) / 18
+        module = result.groups[0].modules[0]
+        for angle in [0, 90, 180, 270]:
+            for mirror in ['none', 'horizontal', 'vertical', 'both']:
+                module.rotation, module.mirror = angle, mirror
+                module.occ_length_m, module.occ_width_m = (2, 4) if angle % 180 else (4, 2)
+                saved = []
+                with patch.object(renderer, 'get_texture_handler', return_value=handler), \
+                        patch.object(handler, 'get_module_texture', return_value=source), \
+                        patch('matplotlib.figure.Figure.savefig', lambda fig, *a, **k: saved.append(fig)):
+                    renderer.render_layout(result, 'unused.png', show_structure=False)
+                expected = source
+                if mirror in ('horizontal', 'both'):
+                    expected = np.fliplr(expected)
+                if mirror in ('vertical', 'both'):
+                    expected = np.flipud(expected)
+                image = saved[0].axes[0].images[0]
+                np.testing.assert_array_equal(image.get_array(), np.rot90(expected, k=-angle // 90))
+                self.assertEqual(tuple(image.get_extent()), (module.x, module.x + module.occ_length_m,
+                                                             module.y, module.y + module.occ_width_m))
 
     def test_concurrent_render_outputs_are_deterministic(self):
         result = calculate_layout({'B': 4}, get_site_polygon(length_m=12, width_m=8))

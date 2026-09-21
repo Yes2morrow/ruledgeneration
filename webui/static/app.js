@@ -1268,10 +1268,10 @@ function drawBedOrientation(bo, poly, label = null) {
 // 安全读取间距数值(米), 缺失返回 null
 function spVal(obj, key) { return (obj && typeof obj[key] === 'number') ? obj[key] : null; }
 
-// 群组预览间距(mm): 取群组间水平间距, 回退 2m
+// 群组预览间距(mm): 取群组间水平间距, 回退 0m
 function groupPreviewGap(g) {
     const v = spVal(g && g.external_spacing, 'horizontal_gap_m');
-    return v != null ? v * 1000 : 2000;
+    return v != null ? v * 1000 : 0;
 }
 
 // 画带标签的间距条带(世界坐标)
@@ -1292,6 +1292,32 @@ function drawSpacingBand(x0, y0, x1, y1, label, color) {
     ctx.restore();
 }
 
+function normalizeRotation(rotation) {
+    const angle = Number(rotation || 0);
+    if (!Number.isFinite(angle) || angle % 90 !== 0) throw new Error('模块 rotation 必须为 90 度的整数倍');
+    return ((angle % 360) + 360) % 360;
+}
+
+// Match geometry.group_grid_geometry: preview units are millimetres.
+function groupGridGeometry(g, mod) {
+    const rows = g.rows || 1, cols = g.cols || 1;
+    const hg = ((g.internal_spacing || {}).horizontal_gap_m || 0) * 1000;
+    const vg = ((g.internal_spacing || {}).vertical_gap_m || 0) * 1000;
+    const widths = Array(cols).fill(0), heights = Array(rows).fill(0);
+    const arr = normalizeArrangement(g.arrangement || []);
+    arr.forEach(item => {
+        if (item.row < 0 || item.row >= rows || item.col < 0 || item.col >= cols) throw new Error('arrangement 行列超出群组网格');
+        const swap = normalizeRotation(item.rotation) % 180 !== 0;
+        widths[item.col] = Math.max(widths[item.col], swap ? mod.W : mod.L);
+        heights[item.row] = Math.max(heights[item.row], swap ? mod.L : mod.W);
+    });
+    const xs = [], ys = [];
+    let gw = 0, gh = 0;
+    widths.forEach((v, i) => { xs.push(gw); gw += (v || mod.L) + (i < cols - 1 ? hg : 0); });
+    heights.forEach((v, i) => { ys.push(gh); gh += (v || mod.W) + (i < rows - 1 ? vg : 0); });
+    return { gw, gh, xs, ys, arr, hg, vg, rows, cols };
+}
+
 function computeGroupBBox(d) {
     const groups = d.groups || [];
     if (groups.length === 0) return null;
@@ -1300,12 +1326,7 @@ function computeGroupBBox(d) {
     const gap = groupPreviewGap(groups[0]); // 群组间间隔(mm, 仅用于预览排布)
     groups.forEach(g => {
         const mod = getModuleDims(d.module_id);
-        const L = mod.L, W = mod.W;
-        const hg = (g.internal_spacing && g.internal_spacing.horizontal_gap_m || 0) * 1000;
-        const vg = (g.internal_spacing && g.internal_spacing.vertical_gap_m || 0) * 1000;
-        const cols = g.cols || 0, rows = g.rows || 0;
-        const gw = cols * L + Math.max(0, cols - 1) * hg;
-        const gh = rows * W + Math.max(0, rows - 1) * vg;
+        const { gw, gh } = groupGridGeometry(g, mod);
         if (!init) { minx = cursorX; miny = 0; maxx = cursorX + gw; maxy = gh; init = true; }
         else { maxx = Math.max(maxx, cursorX + gw); maxy = Math.max(maxy, gh); miny = Math.min(miny, 0); }
         cursorX += gw + gap;
@@ -1322,10 +1343,7 @@ function drawGroups(d) {
 
     groups.forEach((g, i) => {
         drawSingleGroup(g, cursorX, 0, mod);
-        const hg = (g.internal_spacing && g.internal_spacing.horizontal_gap_m || 0) * 1000;
-        const vg = (g.internal_spacing && g.internal_spacing.vertical_gap_m || 0) * 1000;
-        const gw = (g.cols || 0) * mod.L + Math.max(0, (g.cols || 0) - 1) * hg;
-        const gh = (g.rows || 0) * mod.W + Math.max(0, (g.rows || 0) - 1) * vg;
+        const { gw, gh } = groupGridGeometry(g, mod);
         // 群组间间距条带(external_spacing 水平方向)
         if (i < groups.length - 1) {
             drawSpacingBand(cursorX + gw, 0, cursorX + gw + gap, gh, `外距H${gap / 1000}m`, 'rgba(255,120,120,0.16)');
@@ -1356,14 +1374,7 @@ function drawGroups(d) {
 
 function drawSingleGroup(g, originX, originY, mod) {
     const L = mod.L, W = mod.W;
-    const hg = (g.internal_spacing && g.internal_spacing.horizontal_gap_m || 0) * 1000;
-    const vg = (g.internal_spacing && g.internal_spacing.vertical_gap_m || 0) * 1000;
-    const cols = g.cols || 0, rows = g.rows || 0;
-    const arr = normalizeArrangement(g.arrangement || []);
-
-    // 群组外框
-    const gw = cols * L + Math.max(0, cols - 1) * hg;
-    const gh = rows * W + Math.max(0, rows - 1) * vg;
+    const { gw, gh, xs, ys, arr, hg, vg, rows, cols } = groupGridGeometry(g, mod);
     const [bx0, by0] = w2s(originX, originY);
     const [bx1, by1] = w2s(originX + gw, originY + gh);
     ctx.save();
@@ -1375,21 +1386,21 @@ function drawSingleGroup(g, originX, originY, mod) {
     // 每个模块
     arr.forEach(item => {
         const col = item.col, row = item.row;
-        const cellX = originX + col * (L + hg);
-        const cellY = originY + row * (W + vg);
+        const cellX = originX + xs[col];
+        const cellY = originY + ys[row];
         drawModuleCell(cellX, cellY, L, W, item, g);
     });
 
     // 组内模块间间距条带(internal_spacing): 水平间隙(H) / 垂直间隙(V)
     if (hg > 0 && cols > 1) {
         for (let c = 1; c < cols; c++) {
-            const x0 = originX + c * (L + hg) - hg;
+            const x0 = originX + xs[c] - hg;
             drawSpacingBand(x0, originY, x0 + hg, originY + gh, `H${hg / 1000}m`, 'rgba(80,180,255,0.20)');
         }
     }
     if (vg > 0 && rows > 1) {
         for (let r = 1; r < rows; r++) {
-            const y0 = originY + r * (W + vg) - vg;
+            const y0 = originY + ys[r] - vg;
             drawSpacingBand(originX, y0, originX + gw, y0 + vg, `V${vg / 1000}m`, 'rgba(255,200,80,0.20)');
         }
     }
@@ -1409,20 +1420,21 @@ function drawSingleGroup(g, originX, originY, mod) {
 }
 
 function drawModuleCell(x, y, L, W, item, g) {
-    const rot = (item.rotation || 0) * Math.PI / 180;
+    const rotation = normalizeRotation(item.rotation);
+    const rot = rotation * Math.PI / 180;
     const mirror = item.mirror || 'none';
     const color = MIRROR_COLORS[mirror] || MIRROR_COLORS.none;
     const modData = getModuleDims(state.data.module_id).data;
     const singleTexture = (modData && modData.visual && modData.visual.single_texture) || null;
-    const rotation = item.rotation || 0;
 
     // 旋转围绕模块中心
-    const cxw = x + L / 2, cyw = y + W / 2;
+    const swap = rotation % 180 !== 0;
+    const cxw = x + (swap ? W : L) / 2, cyw = y + (swap ? L : W) / 2;
     const [cx, cy] = w2s(cxw, cyw);
     ctx.save();
     ctx.translate(cx, cy);
-    // 屏幕坐标下 y 已翻转, 旋转方向需取反
-    ctx.rotate(-rot);
+    // Canvas y 向下：正角度对应场地坐标的顺时针旋转。
+    ctx.rotate(rot);
     const sxL = L * view.scale, syW = W * view.scale;
 
     // 单体材质(按镜像翻转)
@@ -1553,7 +1565,7 @@ function getModuleDims(moduleId) {
 
 /* 将局部朝向(北/南/东/西)按 镜像->旋转 转换为世界朝向 */
 function transformDirection(localDir, rotationDeg, mirror) {
-    const ccw = ['north', 'west', 'south', 'east']; // 逆时针顺序
+    const clockwise = ['north', 'east', 'south', 'west'];
     let d = localDir;
     // 先应用镜像(模块局部坐标系内)
     if (mirror === 'vertical' || mirror === 'both') {
@@ -1564,10 +1576,10 @@ function transformDirection(localDir, rotationDeg, mirror) {
         if (d === 'east') d = 'west';
         else if (d === 'west') d = 'east';
     }
-    // 再应用旋转(世界坐标系逆时针)
-    const steps = Math.round((((rotationDeg % 360) + 360) % 360) / 90) % 4;
-    const idx = ccw.indexOf(d);
-    if (idx >= 0) d = ccw[(idx + steps) % 4];
+    // 再应用顺时针旋转，与后端坐标及贴图一致
+    const steps = normalizeRotation(rotationDeg) / 90;
+    const idx = clockwise.indexOf(d);
+    if (idx >= 0) d = clockwise[(idx + steps) % 4];
     return d;
 }
 
@@ -1578,13 +1590,11 @@ function transformModulePointToWorld(px, py, L, W, x, y, rotDeg, mirror) {
     else if (mirror === 'horizontal') mx = L - px;
     else if (mirror === 'both') { mx = L - px; my = W - py; }
 
-    const dx = mx - L / 2;
-    const dy = my - W / 2;
-    const rad = rotDeg * Math.PI / 180;
-    const cos = Math.cos(rad), sin = Math.sin(rad);
-    const wx = x + L / 2 + dx * cos - dy * sin;
-    const wy = y + W / 2 + dx * sin + dy * cos;
-    return [wx, wy];
+    for (let k = 0; k < normalizeRotation(rotDeg) / 90; k++) {
+        [mx, my] = [my, L - mx];
+        [L, W] = [W, L];
+    }
+    return [x + mx, y + my];
 }
 
 /* arrangement 元素归一化为 {row,col,rotation,mirror} */

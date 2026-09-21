@@ -25,13 +25,14 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 from matplotlib import rc_context  # noqa: E402
 from matplotlib.font_manager import FontProperties  # noqa: E402
-from matplotlib.patches import Polygon as MplPolygon, Rectangle  # noqa: E402
+from matplotlib.patches import Polygon as MplPolygon, Rectangle, PathPatch
+from matplotlib.path import Path as MplPath  # noqa: E402
 
 _PROJ = Path(__file__).resolve().parents[1]
 if str(_PROJ / "02_placement_generation") not in sys.path:
     sys.path.insert(0, str(_PROJ / "02_placement_generation"))
 
-from geometry import BedInstance, LayoutResult, PlacedGroup, PlacedModule, RoadArea, polygon_bbox  # noqa: E402
+from geometry import BedInstance, LayoutResult, PlacedGroup, PlacedModule, RoadArea, polygon_bbox, normalize_rotation  # noqa: E402
 
 # 中文字体配置。
 # 注意: 不使用 plt.rcParams 全局赋值(那是进程级共享状态, 多线程渲染时会互相干扰),
@@ -191,6 +192,7 @@ class TextureHandler:
         rotated: bool = False,
         mirror: str = "none",
         alpha: float = 1.0,
+        rotation: Optional[int] = None,
     ) -> None:
         """在指定矩形区域内显示贴图, 支持整体旋转与模块镜像。"""
         img = image
@@ -200,9 +202,8 @@ class TextureHandler:
             img = np.fliplr(img)
         if m in ("vertical", "both"):
             img = np.flipud(img)
-        if rotated:
-            # 组整体顺时针旋转 90 度时, 贴图也顺时针旋转 90 度
-            img = np.rot90(img, k=-1)
+        angle = normalize_rotation(rotation if rotation is not None else (90 if rotated else 0))
+        img = np.rot90(img, k=-(angle // 90))
         ax.imshow(
             img,
             extent=[x, x + width, y, y + height],
@@ -326,50 +327,21 @@ def _render_layout_inner(
         )
     )
 
-    # 道路(仅结构校对图显示，使用醒目色块便于区分)
+    # Actual reachable open space, with bed footprints cut out as holes.
+    # Disconnected pockets are shown separately; neither counts as a whole-site road.
     if show_structure and show_roads:
-        # 先把整个场地作为交通区域背景填充
-        ax.add_patch(
-            MplPolygon(
-                site,
-                closed=True,
-                facecolor="#E6F3F8",
-                edgecolor="none",
-                zorder=0,
-            )
-        )
         for road in result.roads:
-            # site_open_area 已在场地背景中体现，跳过重复绘制
-            if road.source == "site_open_area":
+            if road.source not in ("walkable", "isolated_open_area"):
                 continue
-            if road.source in ("module", "internal_gap", "external_gap", "module_perimeter"):
-                # 模块内部道路需要覆盖在贴图上方才能看清
-                zorder = 2.5 if road.source in ("module", "internal_gap") else 1
-                alpha = 0.65 if road.source in ("module", "internal_gap") else 0.55
-                ax.add_patch(
-                    MplPolygon(
-                        road.polygon_m,
-                        closed=True,
-                        facecolor="#87CEEB",
-                        edgecolor="#4682B4",
-                        linewidth=0.8,
-                        alpha=alpha,
-                        zorder=zorder,
-                    )
-                )
-                if show_labels and road.source == "external_gap":
-                    rminx, rminy, rmaxx, rmaxy = polygon_bbox(road.polygon_m)
-                    rcx, rcy = (rminx + rmaxx) / 2, (rminy + rmaxy) / 2
-                    ax.text(
-                        rcx,
-                        rcy,
-                        road.name,
-                        fontsize=5,
-                        ha="center",
-                        va="center",
-                        color="#2F4F4F",
-                        zorder=2,
-                    )
+            rings = [road.polygon_m] + road.holes_m
+            paths = [MplPath(list(ring) + [ring[0]], closed=True) for ring in rings if len(ring) >= 3]
+            if not paths:
+                continue
+            ax.add_patch(PathPatch(
+                MplPath.make_compound_path(*paths),
+                facecolor="#87CEEB" if road.source == "walkable" else "#F7CA76",
+                edgecolor="none", alpha=0.45, zorder=2.5,
+            ))
 
     # 群组与模块
     for gi, g in enumerate(result.groups):
@@ -381,7 +353,7 @@ def _render_layout_inner(
             if tex_image is not None:
                 texture_handler.apply_texture(
                     ax, m.x, m.y, m.occ_length_m, m.occ_width_m,
-                    tex_image, rotated=m.rotation == 90, mirror=m.mirror,
+                    tex_image, rotation=m.rotation, mirror=m.mirror,
                 )
             elif not show_structure:
                 # Missing artwork must not silently hide real beds.

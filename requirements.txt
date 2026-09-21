@@ -5,6 +5,7 @@ typing-extensions==4.12.2
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 pyyaml==6.0.2
+shapely==2.1.2
 
 # 云存储: 多实例部署时把产物外置到 CloudBase 云存储(底层 COS)。
 # 未配置 COS_* 环境变量时不会导入, 自动回落到本地盘单实例模式。
