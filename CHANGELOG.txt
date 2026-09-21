@@ -16,7 +16,7 @@
   completely with 1.2 m public roads; the U-site fits 8 beds with a 1.0 m fallback.
 - See docs/release-0.2.2.md for actual images, model limitations and current
   performance. Earlier bed-only timing and connectivity claims are superseded.
-- No cloud deployment. Git publication and release tag updates remain pending.
+- No cloud deployment. Release version: 0.2.2.
 
 0.2.1
 
