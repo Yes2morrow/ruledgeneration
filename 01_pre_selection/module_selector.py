@@ -185,11 +185,12 @@ def select_modules(
     needed = math.ceil(evacuees / max(primary_beds, 1))
     needed = ((needed + primary_step - 1) // primary_step) * primary_step
 
+    # 推荐试排与最终生成采用相同道路规则，避免无过滤的堵路排布误判为无解。
     # 从 needed 开始按 step 递减, 找到能放下的最大数量
     best_selection: Dict[str, int] = {}
     for qty in range(needed, 0, -primary_step):
         sel = {primary_id: qty}
-        result = layout_runner(sel, site_polygon, allow_decompose=True, road_check=False)
+        result = layout_runner(sel, site_polygon, allow_decompose=True, road_check=True)
         if result.success and not result.unplaced:
             best_selection = sel
             break
@@ -232,7 +233,7 @@ def _fill_site_to_capacity(
             step = module_step(mid)
             trial = dict(filled)
             trial[mid] = trial.get(mid, 0) + step
-            result = layout_runner(trial, site_polygon, allow_decompose=True, road_check=False)
+            result = layout_runner(trial, site_polygon, allow_decompose=True, road_check=True)
             if result.success and not result.unplaced:
                 filled = trial
                 progressed = True
@@ -268,7 +269,7 @@ def _fill_with_secondary(
             continue
         trial = dict(selection)
         trial[sec_id] = trial.get(sec_id, 0) + add_qty
-        result = layout_runner(trial, site_polygon, allow_decompose=True, road_check=False)
+        result = layout_runner(trial, site_polygon, allow_decompose=True, road_check=True)
         if result.success and not result.unplaced:
             selection = trial
         else:
@@ -278,7 +279,7 @@ def _fill_with_secondary(
             if half > 0 and half < add_qty:
                 trial2 = dict(selection)
                 trial2[sec_id] = trial2.get(sec_id, 0) + half
-                r2 = layout_runner(trial2, site_polygon, allow_decompose=True, road_check=False)
+                r2 = layout_runner(trial2, site_polygon, allow_decompose=True, road_check=True)
                 if r2.success and not r2.unplaced:
                     selection = trial2
 

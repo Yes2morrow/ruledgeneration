@@ -18,14 +18,16 @@ U_SITE = [(0, 0), (10, 0), (10, 10), (7, 10), (7, 3), (3, 3), (3, 10), (0, 10)]
 
 class GeometryRegressions(unittest.TestCase):
     def test_exact_fit_all_module_types(self):
+        # Geometry-only fit: an exact module envelope leaves no public road.
         for code in 'ABCDEFG':
             with self.subTest(code=code):
                 config = load_module_config(code)
                 group = min(get_group_defs(code), key=lambda g: g['module_count'])
                 w, h = calculate_group_size(group, config, False)
-                result = calculate_layout({code: group['module_count']}, [(0, 0), (w, 0), (w, h), (0, h)])
+                result = calculate_layout({code: group['module_count']}, [(0, 0), (w, 0), (w, h), (0, h)], road_check=False)
                 self.assertEqual(len(result.beds), group['module_count'] * len(config['beds_layout']))
                 self.assertFalse(result.unplaced)
+                self.assertFalse(result.metrics["road_connected"])
 
     def test_concave_boundary_cannot_cross_rectangle_interior(self):
         for polygon in [U_SITE, list(reversed(U_SITE)), U_SITE + [U_SITE[0]]]:
@@ -38,10 +40,12 @@ class GeometryRegressions(unittest.TestCase):
         self.assertFalse(rect_in_polygon((0, 0, 4, 4), diamond))
 
     def test_concave_layout_decomposes_and_uses_legal_lobes(self):
+        # Disable candidate road filtering to isolate decomposition geometry.
+        # Real U-site road clearance is covered by test_road_connectivity.
         # Translation also ensures the search does not assume that (0, 0) is available.
         for dx, dy in [(0, 0), (20, 30), (-20, -30)]:
             site = [(x + dx, y + dy) for x, y in U_SITE]
-            result = calculate_layout({'B': 4}, site)
+            result = calculate_layout({'B': 4}, site, road_check=False)
             self.assertEqual(len(result.beds), 8)
             self.assertFalse(result.unplaced)
             self.assertEqual([g.module_count for g in result.groups], [2, 2])

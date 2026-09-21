@@ -42,6 +42,9 @@ def main():
         render_layout(result, out / f'{name}.png', show_structure=False)
         row.update(render_s=round(time.perf_counter()-start,4), actual_beds=len(result.beds),
                    blocked=result.metrics['beds_without_road_access_count'],
+                   opening_errors=result.metrics['road_opening_errors_count'],
+                   public_width_m=result.metrics['public_road_width_m'],
+                   success=result.success,
                    checked_candidates=result.metrics['connectivity_candidates_checked'])
         rows.append(row)
         print(json.dumps(row), flush=True)

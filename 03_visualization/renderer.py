@@ -327,11 +327,11 @@ def _render_layout_inner(
         )
     )
 
-    # Actual reachable open space, with bed footprints cut out as holes.
-    # Disconnected pockets are shown separately; neither counts as a whole-site road.
+    # Public roads exclude entire module footprints; internal aisles are explicit.
+    # Narrow or disconnected open space is shown separately from usable roads.
     if show_structure and show_roads:
         for road in result.roads:
-            if road.source not in ("walkable", "isolated_open_area"):
+            if road.source not in ("walkable", "module", "nonroad_open_area"):
                 continue
             rings = [road.polygon_m] + road.holes_m
             paths = [MplPath(list(ring) + [ring[0]], closed=True) for ring in rings if len(ring) >= 3]
@@ -339,7 +339,7 @@ def _render_layout_inner(
                 continue
             ax.add_patch(PathPatch(
                 MplPath.make_compound_path(*paths),
-                facecolor="#87CEEB" if road.source == "walkable" else "#F7CA76",
+                facecolor={"walkable":"#87CEEB", "module":"#8DD4A9", "nonroad_open_area":"#F7CA76"}[road.source],
                 edgecolor="none", alpha=0.45, zorder=2.5,
             ))
 

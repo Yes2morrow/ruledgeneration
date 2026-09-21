@@ -79,6 +79,11 @@ def main():
     _print_summary("recommend | 24人 | 18x16 | economy", p3)
     assert p3["summary"]["totalBeds"] >= 24, "recommend(小场地) 床位不足 24!"
 
+    for payload in [p1, p2, p3]:
+        metrics = payload["layout"]["metrics"]
+        assert metrics["road_model"] == "explicit_aisles_and_public_clearance"
+        assert metrics["road_connected"] and metrics["road_opening_errors_count"] == 0
+
     print("\n所有端到端测试通过!")
     return 0
 

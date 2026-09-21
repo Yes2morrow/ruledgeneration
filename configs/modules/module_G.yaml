@@ -10,7 +10,13 @@ dimensions:
 bed_orientation:
   head_direction: north
   head_position_mm: 4100
-road_areas: []
+# 中部为不可穿越柜体，两个通道独立接入左右侧道路。
+# 按现有贴图比例保守描绘通道净空；不改变床位和模块外形尺寸。
+road_areas:
+- name: lower_aisle
+  polygon: [[0, 900], [1900, 900], [1900, 1780], [0, 1780]]
+- name: upper_aisle
+  polygon: [[900, 2320], [2800, 2320], [2800, 3200], [900, 3200]]
 beds_layout:
 - bed_id: 1
   head_direction: north

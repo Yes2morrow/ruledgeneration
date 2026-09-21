@@ -1,27 +1,22 @@
 0.2.2 - 2026-09-22
 
-- Include boundary points in containment and reject rectangles crossing concave
-  site notches. Search site edges and sloping-boundary contacts; use existing
-  decomposition rules to place smaller legal groups when a large group fails.
-- Use clockwise 0/90/180/270-degree rotations consistently for module/grid
-  footprints, bed geometry, textures, and the configuration editor preview.
-- Correct B bed 2's -1 mm vertex to 0; correct G bed 4's head direction to south.
-- Set target external group spacing to 0, retaining internal group spacing.
-  Reject candidates that disconnect any existing or new bed from site-boundary
-  circulation; try another position/orientation or existing decomposition rules.
-- Replace whole-site/perimeter overlap checks with actual free-space connectivity.
-  Serialize road holes and isolated pockets; always audit final connectivity.
-- Cache existing bed unions and scoring data, bulk-filter rectangle candidates,
-  and stop connectivity evaluation at the first acceptable ranked candidate.
-- Validation: 27 Python regression tests, 3 preview tests, 3 end-to-end cases;
-  independent local audit: 28,000 containment cases, 105 placement cases and
-  32 group cases, plus 160 mixed layouts with no blocked beds or geometry failures.
-  The 100-bed example places all 100 beds in 36 modules. A known 64-bed blockage
-  case retains 64 beds while reducing inaccessible beds from 7 to 0.
-- Local median layout time: 100 beds 0.0741s; 300 B beds 0.5617s; 300 G beds
-  3.1931s. PNG rendering is measured separately. See docs/release-0.2.2.md.
-- Added Shapely 2.1.2 for robust millimetre-precision connectivity geometry.
-- No cloud deployment. Existing release tags are unchanged.
+- Fix concave containment, consistent quarter-turn transforms, per-module artwork
+  and bed coordinates; keep target external group spacing at zero.
+- Replace bed-only connectivity with explicit internal aisles, real openings and
+  1.2 m public roads. Allow an explicitly reported 1.0 m fallback when it fits more
+  beds. Reject openings against walls, site edges or insufficient public clearance.
+- Treat G's middle barrier as impassable and its two aisles separately; restore
+  E's missing upper aisle branch without changing module or bed dimensions.
+- Try opposite-facing entrances and existing group decomposition when necessary.
+  Recommendation trials now use the same road rules as final generation.
+- Cache unchanged opening geometry and bed/aisle contacts; omit display-only
+  unions during candidate checks. Final audit always runs.
+- Validation: 35 Python regressions, 3 preview tests, 3 end-to-end cases, and
+  64 mixed-site geometry/cache-consistency audits. 64- and 100-bed examples fit
+  completely with 1.2 m public roads; the U-site fits 8 beds with a 1.0 m fallback.
+- See docs/release-0.2.2.md for actual images, model limitations and current
+  performance. Earlier bed-only timing and connectivity claims are superseded.
+- No cloud deployment. Git publication and release tag updates remain pending.
 
 0.2.1
 

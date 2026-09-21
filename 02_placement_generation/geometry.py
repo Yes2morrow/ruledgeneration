@@ -324,7 +324,7 @@ class RoadArea:
 
     name: str
     polygon_m: Polygon
-    source: str  # "module" | "internal_gap" | "walkable" | "isolated_open_area"
+    source: str  # "module" | "internal_gap" | "walkable" | "nonroad_open_area"
     holes_m: List[Polygon] = field(default_factory=list)
 
 

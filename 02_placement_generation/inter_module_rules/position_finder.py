@@ -99,6 +99,7 @@ def _generate_candidates(
     group_w: float,
     group_h: float,
     group_def: dict,
+    clearance_m: float = 0.0,
 ) -> List[Point]:
     """生成候选放置位置 (x, y)。
 
@@ -122,6 +123,9 @@ def _generate_candidates(
     # 网格: 用已放置群组的 x/y 边界值组合(含间距偏移, 提高命中率)
     xs = {x - offset for x, _ in site_polygon for offset in (0, group_w)}
     ys = {y - offset for _, y in site_polygon for offset in (0, group_h)}
+    if clearance_m:
+        xs.update(x + offset for x, _ in site_polygon for offset in (clearance_m, -group_w-clearance_m))
+        ys.update(y + offset for _, y in site_polygon for offset in (clearance_m, -group_h-clearance_m))
     for p in placed:
         sx, sy = _pair_spacing(group_def, getattr(p, "_group_def", group_def))
         px, py, pw, ph = p.rect
@@ -133,6 +137,9 @@ def _generate_candidates(
         ys.add(py + ph)
         ys.add(py + ph + sy)
         ys.update((py - group_h - sy, py + ph - group_h))
+        if clearance_m:
+            xs.update((px + pw + clearance_m, px - group_w - clearance_m))
+            ys.update((py + ph + clearance_m, py - group_h - clearance_m))
 
     # Boundary-contact candidates, including sloping edges and shifted sites.
     # Translate site edges by each rectangle corner; their intersections are
@@ -320,6 +327,7 @@ def find_best_position(
     placed: List,
     site_polygon: Polygon,
     candidate_validator=None,
+    clearance_m: float = 0.0,
 ) -> Optional[Tuple[float, float, bool, float, float]]:
     """为群组寻找最佳放置位置。
 
@@ -353,13 +361,13 @@ def find_best_position(
         return not np.any((gaps_x < spacings[:,0]-1e-9) & (gaps_y < spacings[:,1]-1e-9))
 
     # 正常方向候选
-    for x, y in _generate_candidates(placed, site_polygon, normal_w, normal_h, group_def):
+    for x, y in _generate_candidates(placed, site_polygon, normal_w, normal_h, group_def, clearance_m):
         rect = (x, y, normal_w, normal_h)
         if fits(rect):
             candidates.append((x, y, False, normal_w, normal_h))
 
     # 旋转方向候选
-    for x, y in _generate_candidates(placed, site_polygon, rotated_w, rotated_h, group_def):
+    for x, y in _generate_candidates(placed, site_polygon, rotated_w, rotated_h, group_def, clearance_m):
         rect = (x, y, rotated_w, rotated_h)
         if fits(rect):
             candidates.append((x, y, True, rotated_w, rotated_h))

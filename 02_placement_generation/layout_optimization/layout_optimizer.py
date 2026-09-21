@@ -8,8 +8,8 @@
   5. 显式参数传递(无环境变量), 保证稳定性。
 
 道路判定:
-  场地扣除床位占用后，床位必须邻接连通至场地边界的空地区域。
-  放置时同时保护已有床位和新床位的出路；未配置墙体/门及最小道路宽度。
+  模块内仅配置通道可通行，每个真实开口必须接入同一公共道路。
+  公共道路优先 1.2m，空间受限时重试 1.0m；内部通道保持原设计。
 """
 from __future__ import annotations
 
@@ -169,6 +169,8 @@ def calculate_layout(
     site_polygon,
     allow_decompose: bool = True,
     road_check: bool = True,
+    public_road_width_m: float = 1.2,
+    allow_width_fallback: bool = True,
 ) -> LayoutResult:
     """主排布入口。
 
@@ -200,7 +202,7 @@ def calculate_layout(
     module_cache: Dict[str, dict] = {}
 
     connectivity_candidates_checked = 0
-    network = RoadNetwork(site_polygon, [])
+    network = RoadNetwork(site_polygon, public_width_m=public_road_width_m)
     i = 0
     while i < len(pending):
         group_def = pending[i]
@@ -220,13 +222,27 @@ def calculate_layout(
             trial_modules, trial_beds, trial_roads = [], [], []
             _build_group_contents(group_def, module_config, x, y, rotated,
                                   trial_modules, trial_beds, trial_roads)
-            if network.evaluate(trial_beds, include_roads=False).blocked_indices:
+            if not network.evaluate(trial_modules, include_roads=False).valid:
                 return False
             accepted_contents = (trial_modules, trial_beds, trial_roads)
             return True
 
         result = find_best_position(group_def, module_config, placed_groups, site_polygon,
-                                    candidate_validator=preserves_access if road_check else None)
+                                    candidate_validator=preserves_access if road_check else None,
+                                    clearance_m=public_road_width_m if road_check else 0)
+        if result is None and road_check:
+            # Opposite-facing entrances may be the only route into a concave lobe.
+            # Reuse quarter-turn geometry instead of adding another layout engine.
+            original = group_def
+            group_def = dict(original, arrangement=[dict(entry,
+                row=int(original.get('rows', 1))-1-int(entry.get('row', 0)),
+                col=int(original.get('cols', 1))-1-int(entry.get('col', 0)),
+                rotation=(normalize_rotation(entry.get('rotation'))+180) % 360)
+                for entry in original.get('arrangement', [])])
+            result = find_best_position(group_def, module_config, placed_groups, site_polygon,
+                                        candidate_validator=preserves_access, clearance_m=public_road_width_m)
+            if result is None:
+                group_def = original
         if result is None:
             # 尝试降级
             if allow_decompose:
@@ -269,7 +285,7 @@ def calculate_layout(
             accepted_contents = ([], [], [])
             _build_group_contents(group_def, module_config, x, y, rotated, *accepted_contents)
         new_modules, new_beds, new_roads = accepted_contents
-        network.commit(new_beds)
+        network.commit(new_modules)
         placed_modules.extend(new_modules)
         beds.extend(new_beds)
         roads.extend(new_roads)
@@ -287,25 +303,31 @@ def calculate_layout(
                  for index in checked.blocked_indices]
     metrics.update(
         road_area_m2=round(checked.reachable_area, 3),
-        isolated_open_area_m2=round(checked.isolated_area, 6),
+        unusable_open_area_m2=round(checked.unusable_area, 6),
         road_component_count=checked.component_count,
         road_connectivity_checked=True,
         road_candidate_filter_enabled=bool(road_check),
-        road_connected=not no_access,
-        road_model="site_minus_beds_to_site_boundary",
+        road_connected=checked.valid,
+        road_model="explicit_aisles_and_public_clearance",
+        public_road_width_m=public_road_width_m,
+        road_width_reduced=False,
+        road_opening_errors=checked.opening_errors,
+        road_opening_errors_count=len(checked.opening_errors),
         connectivity_candidates_checked=connectivity_candidates_checked,
         beds_without_road_access=no_access,
         beds_without_road_access_count=len(no_access),
     )
-    success = not unplaced and not no_access
+    success = not unplaced and checked.valid
     messages = []
     if unplaced:
         messages.append(f"未能在边界、不重叠及道路连通约束下放置 {len(unplaced)} 个群组")
     if no_access:
-        messages.append(f"{len(no_access)} 张床缺少连通至场地边界的道路")
+        messages.append(f"{len(no_access)} 张床的内部通道未接入主路")
+    if checked.opening_errors:
+        messages.append(f"{len(checked.opening_errors)} 处通道开口或直接连接未通过检查")
     message = "；".join(messages)
 
-    return LayoutResult(
+    layout = LayoutResult(
         site_polygon=site_polygon,
         groups=placed_groups,
         beds=beds,
@@ -315,6 +337,14 @@ def calculate_layout(
         message=message,
         unplaced=unplaced,
     )
+    if road_check and unplaced and allow_width_fallback and public_road_width_m > 1.0:
+        narrower = calculate_layout(modules_selection, site_polygon, allow_decompose, road_check,
+                                    public_road_width_m=1.0, allow_width_fallback=False)
+        if narrower.metrics.get('road_connected') and len(narrower.beds) > len(layout.beds):
+            narrower.metrics['road_width_reduced'] = True
+            narrower.message = f'{public_road_width_m:g} 米道路方案未放下全部模块，已采用 1.0 米公共道路。' + narrower.message
+            return narrower
+    return layout
 
 
 def layout_result_to_dict(result: LayoutResult) -> dict:
