@@ -5,12 +5,11 @@
      不再硬编码 A=2.0/C=1.5。
   2. 场地为任意多边形(支持矩形退化), 用 rect_in_polygon 做边界检查。
   3. 候选生成: 场地边界接触点 + 已放置群组边缘/间距 + 网格搜索。
-  4. 打分: 少旋转 > 高网格度(对齐边+正确间距邻居) > 小 footprint > 左下优先。
+  4. 打分: 少旋转（整理补充单体时优先同类方向）> 高网格度 > 小 footprint。
   5. 群组间距取双方对应方向间距的最大值, 满足各自要求。
 """
 from __future__ import annotations
 
-import os
 import sys
 from bisect import bisect_left
 import numpy as np
@@ -100,6 +99,7 @@ def _generate_candidates(
     group_h: float,
     group_def: dict,
     clearance_m: float = 0.0,
+    reserved_rects=(),
 ) -> List[Point]:
     """生成候选放置位置 (x, y)。
 
@@ -140,6 +140,10 @@ def _generate_candidates(
         if clearance_m:
             xs.update((px + pw + clearance_m, px - group_w - clearance_m))
             ys.update((py + ph + clearance_m, py - group_h - clearance_m))
+
+    for x, y, w, h in reserved_rects:
+        xs.update((x, x+w, x-group_w, x+w-group_w))
+        ys.update((y, y+h, y-group_h, y+h-group_h))
 
     # Boundary-contact candidates, including sloping edges and shifted sites.
     # Translate site edges by each rectangle corner; their intersections are
@@ -286,13 +290,19 @@ def _score(
 ) -> tuple:
     """候选位置打分, 越小越优。
 
-    优先级: 少旋转 > 高网格度(对齐边+正确间距邻居) > 小(footprint+长宽比+紧凑度) > 左下优先。
+    优先级: 少旋转（整理补充单体时优先同类方向）> 高网格度 > 小 footprint。
 
     网格度合并了对齐(跨行坐标对齐)与正确间距邻居(按 external_spacing 紧邻),
     鼓励形成规整网格与贯通道路(十字路口)。
     """
     x, y, rotated, w, h = candidate
-    rot_penalty = 1 if rotated else 0
+    module_id = group_def.get('module_id')
+    same_type = ([p for p in placed if module_id and getattr(p, 'module_id', None) == module_id]
+                 if group_def.get('_align_supplement') else [])
+    # A remainder single must follow an already rotated pair/row. A global
+    # preference for unrotated groups otherwise strands it at a remote corner.
+    rot_penalty = (sum(bool(p.rotated) != rotated for p in same_type)
+                   if same_type else int(rotated))
 
     # 网格度(对齐边 + 正确间距邻居)
     grid = _grid_score(candidate, placed, group_def, context)
@@ -328,12 +338,15 @@ def find_best_position(
     site_polygon: Polygon,
     candidate_validator=None,
     clearance_m: float = 0.0,
+    reserved_rects=(),
 ) -> Optional[Tuple[float, float, bool, float, float]]:
     """为群组寻找最佳放置位置。
 
     返回 (x, y, rotated, length_m, width_m) 或 None。
     placed 元素需有 .rect 和 ._group_def 属性(由 layout_optimizer 设置)。
     """
+    from compute_budget import check_budget
+    check_budget()
     normal_w, normal_h = calculate_group_size(group_def, module_config, rotated=False)
     rotated_w, rotated_h = calculate_group_size(group_def, module_config, rotated=True)
 
@@ -356,21 +369,33 @@ def find_best_position(
                 return False
         elif not rect_in_polygon(rect, site_polygon):
             return False
+        if any(x < rx+rw-1e-9 and x+w > rx+1e-9 and y < ry+rh-1e-9 and y+h > ry+1e-9
+               for rx, ry, rw, rh in reserved_rects):
+            return False
         gaps_x = np.maximum(x, rects[:,0]) - np.minimum(x+w, ends[:,0])
         gaps_y = np.maximum(y, rects[:,1]) - np.minimum(y+h, ends[:,1])
         return not np.any((gaps_x < spacings[:,0]-1e-9) & (gaps_y < spacings[:,1]-1e-9))
 
-    # 正常方向候选
-    for x, y in _generate_candidates(placed, site_polygon, normal_w, normal_h, group_def, clearance_m):
-        rect = (x, y, normal_w, normal_h)
-        if fits(rect):
-            candidates.append((x, y, False, normal_w, normal_h))
-
-    # 旋转方向候选
-    for x, y in _generate_candidates(placed, site_polygon, rotated_w, rotated_h, group_def, clearance_m):
-        rect = (x, y, rotated_w, rotated_h)
-        if fits(rect):
-            candidates.append((x, y, True, rotated_w, rotated_h))
+    for rotated, w, h in ((False, normal_w, normal_h), (True, rotated_w, rotated_h)):
+        points = _generate_candidates(placed, site_polygon, w, h, group_def, clearance_m, reserved_rects)
+        if not rectangle_site:
+            candidates.extend((x, y, rotated, w, h) for x, y in points if fits((x, y, w, h)))
+            continue
+        # Same rectangle tests and candidate order, batched to avoid one Python/
+        # numpy dispatch per point in the large grids produced near saturation.
+        xy = np.asarray(points, dtype=float).reshape(-1, 2)
+        xy = xy[(xy[:, 0] >= minx-1e-9) & (xy[:, 1] >= miny-1e-9)
+                & (xy[:, 0]+w <= maxx+1e-9) & (xy[:, 1]+h <= maxy+1e-9)]
+        for rx, ry, rw, rh in reserved_rects:
+            xy = xy[~((xy[:, 0] < rx+rw-1e-9) & (xy[:, 0]+w > rx+1e-9)
+                       & (xy[:, 1] < ry+rh-1e-9) & (xy[:, 1]+h > ry+1e-9))]
+        for offset in range(0, len(xy), 256):
+            chunk = xy[offset:offset+256]
+            x, y = chunk[:, 0, None], chunk[:, 1, None]
+            gaps_x = np.maximum(x, rects[:, 0]) - np.minimum(x+w, ends[:, 0])
+            gaps_y = np.maximum(y, rects[:, 1]) - np.minimum(y+h, ends[:, 1])
+            valid = ~np.any((gaps_x < spacings[:, 0]-1e-9) & (gaps_y < spacings[:, 1]-1e-9), axis=1)
+            candidates.extend((float(x), float(y), rotated, w, h) for x, y in chunk[valid])
 
     if not candidates:
         return None
@@ -380,6 +405,7 @@ def find_best_position(
     # Connectivity is more expensive than rectangle tests. Evaluate in preference
     # order and stop at the first valid candidate, preserving the scoring policy.
     for candidate in sorted(candidates, key=lambda c: _score(c, placed, site_polygon, group_def, context)):
+        check_budget()
         if candidate_validator(candidate):
             return candidate
     return None

@@ -53,47 +53,6 @@ def point_in_polygon(point: Point, polygon: Polygon) -> bool:
     return inside
 
 
-def _segments_intersect(p1: Point, p2: Point, p3: Point, p4: Point) -> bool:
-    """两线段是否相交(严格相交, 共线视为不相交以避免边界误判)。"""
-
-    def ccw(a: Point, b: Point, c: Point) -> float:
-        return (c[1] - a[1]) * (b[0] - a[0]) - (b[1] - a[1]) * (c[0] - a[0])
-
-    d1 = ccw(p3, p4, p1)
-    d2 = ccw(p3, p4, p2)
-    d3 = ccw(p1, p2, p3)
-    d4 = ccw(p1, p2, p4)
-    if ((d1 > 0 and d2 < 0) or (d1 < 0 and d2 > 0)) and (
-        (d3 > 0 and d4 < 0) or (d3 < 0 and d4 > 0)
-    ):
-        return True
-    return False
-
-
-def polygons_overlap(a: Polygon, b: Polygon) -> bool:
-    """两个多边形是否相交(边相交或包含)。bbox 快速排除。"""
-    ax0, ay0, ax1, ay1 = polygon_bbox(a)
-    bx0, by0, bx1, by1 = polygon_bbox(b)
-    if ax1 < bx0 - 1e-9 or bx1 < ax0 - 1e-9 or ay1 < by0 - 1e-9 or by1 < ay0 - 1e-9:
-        return False
-    na, nb = len(a), len(b)
-    # 边相交
-    for i in range(na):
-        p1, p2 = a[i], a[(i + 1) % na]
-        for j in range(nb):
-            p3, p4 = b[j], b[(j + 1) % nb]
-            if _segments_intersect(p1, p2, p3, p4):
-                return True
-    # 包含
-    for p in a:
-        if point_in_polygon(p, b):
-            return True
-    for p in b:
-        if point_in_polygon(p, a):
-            return True
-    return False
-
-
 # --------------------------------------------------------------------------- #
 # 轴对齐矩形间距检查 (用于组间 external_spacing)
 # --------------------------------------------------------------------------- #

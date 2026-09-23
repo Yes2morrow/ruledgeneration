@@ -1,6 +1,7 @@
 """Actual openings, public clearance and independently checked geometry."""
 import sys
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from shapely.geometry import Polygon, box
 from shapely.ops import unary_union
@@ -9,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / '05_config_and_tools'))
 import service_adapter
 from config_loader import get_group_defs, load_module_config
-from geometry import PlacedModule, LayoutResult
+from geometry import PlacedModule
 from layout_optimizer import calculate_layout, layout_result_to_dict
 from road_connectivity import RoadNetwork
 
@@ -30,18 +31,38 @@ def module(x=5, y=5, aisle=(0,1,4,3)):
     return PlacedModule('test','test',x,y,0,'none',4000,4000,4,4,cfg)
 
 
-def independent_blocked(result):
-    """Legacy bed-only oracle retained for geometry audit scripts, not road approval."""
-    site = Polygon(result.site_polygon)
-    polygons = [Polygon([(round(x,3),round(y,3)) for x,y in b.polygon_m]) for b in result.beds]
-    free = site.difference(unary_union(polygons))
-    parts = [free] if free.geom_type == 'Polygon' else list(free.geoms)
-    reachable = unary_union([p for p in parts if p.boundary.intersection(site.boundary).length > 1e-7])
-    return [i for i,p in enumerate(polygons)
-            if p.boundary.intersection(reachable.boundary.buffer(1e-8)).length < 1e-6]
-
-
 class RoadConnectivityTests(unittest.TestCase):
+    def test_fast_opening_rejection_agrees_with_full_geometry(self):
+        import random
+        rng = random.Random(1903060)
+        for rotation in (0, 90, 180, 270):
+            base = [module(5, 5), module(12, 14)]
+            network = RoadNetwork(SITE, base)
+            for _ in range(60):
+                candidate = replace(module(round(rng.uniform(.1, 16), 3),
+                                           round(rng.uniform(.1, 26), 3)), rotation=rotation)
+                # Only disjoint footprints are candidates at the packing seam.
+                shape = network._geometry(candidate)[0]
+                if any(shape.intersection(item[0]).area > 1e-6 for item in network.items):
+                    continue
+                self.assertEqual(network.evaluate([candidate], include_roads=False).valid,
+                                 RoadNetwork(SITE, base + [candidate]).evaluate().valid)
+
+    def test_translated_geometry_cache_matches_the_scalar_rounding_path(self):
+        network = RoadNetwork(SITE)
+        for rotation in (0, 90, 180, 270):
+            for mirror in ('none', 'horizontal', 'vertical', 'both'):
+                original = replace(module(5.2, 5.3), rotation=rotation, mirror=mirror)
+                # Off-grid epsilon selects the scalar branch, but rounds to the
+                # identical millimetre coordinates used by the translation cache.
+                scalar = network._geometry(replace(original, x=original.x + .0000001))
+                cached = network._geometry(original)
+                self.assertTrue(cached[0].equals(scalar[0]))
+                for index in (1, 2, 4):
+                    self.assertEqual(len(cached[index]), len(scalar[index]))
+                    self.assertTrue(all(a.equals(b) for a, b in zip(cached[index], scalar[index])))
+                self.assertEqual(cached[5], scalar[5])
+
     def test_all_group_external_gaps_stay_zero(self):
         for code in 'ABCDEFG':
             for group in get_group_defs(code):
@@ -123,21 +144,21 @@ class RoadConnectivityTests(unittest.TestCase):
                 self.assertLess(shape.intersection(roads).area,1e-5,code)
                 self.assertGreater(shape.boundary.intersection(roads).length,0,code)
 
-    def test_64_bed_case_keeps_all_beds_and_1_2m_public_roads(self):
+    def test_dense_64_bed_case_cannot_pass_after_path_repair_loses_modules(self):
         result=calculate_layout({'D':2,'G':12,'C':4},SITE)
-        self.assertEqual(len(result.beds),64)
-        self.assertTrue(result.success)
+        self.assertFalse(result.success)
+        self.assertTrue(result.unplaced or not result.metrics['route_access_valid'])
         self.assertEqual(result.metrics['public_road_width_m'],1.2)
         self.assertFalse(result.metrics['road_width_reduced'])
         self.assertEqual(result.metrics['road_opening_errors_count'],0)
 
-    def test_u_site_uses_opposite_openings_and_explicit_1m_fallback(self):
+    def test_u_site_does_not_shrink_roads_to_force_the_selection(self):
         result=calculate_layout({'B':4},U_SITE)
-        self.assertEqual(len(result.beds),8)
-        self.assertTrue(result.success)
-        self.assertEqual(result.metrics['public_road_width_m'],1.0)
-        self.assertTrue(result.metrics['road_width_reduced'])
-        self.assertIn(270,[m.rotation for g in result.groups for m in g.modules])
+        self.assertFalse(result.success)
+        self.assertEqual(result.metrics['public_road_width_m'],1.2)
+        self.assertFalse(result.metrics['road_width_reduced'])
+        with self.assertRaises(ValueError):
+            calculate_layout({'B':4},U_SITE,public_road_width_m=1.0)
 
     def test_disabling_candidate_filter_does_not_fake_a_pass(self):
         result=calculate_layout({'D':2,'G':12,'C':4},SITE,road_check=False)

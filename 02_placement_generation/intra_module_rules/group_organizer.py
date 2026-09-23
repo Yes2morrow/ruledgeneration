@@ -10,10 +10,9 @@ from __future__ import annotations
 
 import copy
 import math
-import os
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 # 注入 01_pre_selection 路径以导入 config_loader
 _PROJ_ROOT = Path(__file__).resolve().parents[2]
@@ -125,21 +124,6 @@ def decompose_group(module_id: str, group_type: str) -> List[dict]:
 
     n = max(1, math.ceil(orig_count / target_count))
     return [_instance(target_def) for _ in range(n)]
-
-
-def full_decompose_chain(module_id: str, group_type: str) -> List[str]:
-    """返回完整降级链 group_type 列表(含自身)。"""
-    chain = [group_type]
-    seen = {group_type}
-    current = group_type
-    while True:
-        nxt = get_decompose_to(module_id, current)
-        if nxt is None or nxt in seen:
-            break
-        chain.append(nxt)
-        seen.add(nxt)
-        current = nxt
-    return chain
 
 
 def estimate_group_footprint(group_def: dict, module_config: dict) -> tuple:

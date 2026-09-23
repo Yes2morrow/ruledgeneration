@@ -1,4 +1,4 @@
-"""云托管并发改造前基线压测脚本。
+"""本地并发性能与渲染隔离检查，不请求云端服务。
 
 用途:
   1. 测量单请求(排布 + 2 次渲染)耗时, 判断能否放进小程序 15s 超时窗口。
@@ -10,16 +10,13 @@
 """
 from __future__ import annotations
 
-import io
 import sys
-import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 RULE_ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = RULE_ROOT / "06_output_results" / "_bench"
-OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 for sub in (
     RULE_ROOT / "01_pre_selection",

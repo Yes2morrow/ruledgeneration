@@ -9,7 +9,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / '05_config_and_tools'))
-import service_adapter
+import service_adapter  # Sets up project import paths.
+from config_loader import load_module_config
 from layout_optimizer import calculate_layout
 from renderer import render_layout, get_texture_handler
 
@@ -30,7 +31,7 @@ def main():
     ]
     rows = []
     for name, selection, w, h in cases:
-        row = {'case':name,'requested_beds':sum(service_adapter.load_module_config(c)['beds']*q for c,q in selection.items())}
+        row = {'case':name,'requested_beds':sum(load_module_config(c)['beds']*q for c,q in selection.items())}
         for checked in [False, True]:
             durations = []
             for _ in range(args.repeats):

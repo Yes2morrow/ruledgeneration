@@ -3,7 +3,7 @@
 绘制层次:
   1. 场地多边形(黑色外框)
   2. 道路区域(浅灰填充)
-  3. 群组贴图(按 group_type / single_texture 选择)
+  3. 逐模块贴图(按 single_texture 选择；A 从旧图集中提取单模块)
   4. 群组外框(大框, 模块色, 粗线)
   5. 模块小框(细线, 与旧项目一致)
   6. 床位多边形(半透明填充 + 床头方向标记 + bed_id)
@@ -15,7 +15,7 @@ import os
 import sys
 import threading
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional
 
 import matplotlib
 
@@ -24,7 +24,6 @@ import matplotlib.image as mpimg  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 from matplotlib import rc_context  # noqa: E402
-from matplotlib.font_manager import FontProperties  # noqa: E402
 from matplotlib.patches import Polygon as MplPolygon, Rectangle, PathPatch
 from matplotlib.path import Path as MplPath  # noqa: E402
 
@@ -32,7 +31,7 @@ _PROJ = Path(__file__).resolve().parents[1]
 if str(_PROJ / "02_placement_generation") not in sys.path:
     sys.path.insert(0, str(_PROJ / "02_placement_generation"))
 
-from geometry import BedInstance, LayoutResult, PlacedGroup, PlacedModule, RoadArea, polygon_bbox, normalize_rotation  # noqa: E402
+from geometry import LayoutResult, PlacedModule, polygon_bbox, normalize_rotation  # noqa: E402
 
 # 中文字体配置。
 # 注意: 不使用 plt.rcParams 全局赋值(那是进程级共享状态, 多线程渲染时会互相干扰),
@@ -113,73 +112,6 @@ class TextureHandler:
                 return atlas[:height // 2, width // 2:]
         return None
 
-    def get_group_texture(self, group: PlacedGroup) -> Optional[Tuple[np.ndarray, bool]]:
-        """获取群组贴图及是否需要旋转。
-
-        返回 (image_array, texture_already_rotated)。
-        当 group.rotated=True 时, 若贴图为横向构图需要顺时针旋转 90 度。
-        """
-        module_id = group.module_id
-        group_type = group.group_type
-        first_config = group.modules[0].config if group.modules else {}
-        visual = first_config.get("visual") or {}
-
-        # 1. 按 group_type 精确匹配
-        for tex in visual.get("textures", []) or []:
-            if tex.get("group_type") == group_type:
-                img = self._try_filenames(tex.get("file", ""))
-                if img is not None:
-                    return img, False
-
-        # 2. 单体默认贴图(兼容带下划线与不带下划线的文件名)
-        single = visual.get("single_texture")
-        if single:
-            img = self._try_filenames(single, single.replace("_", ""))
-            if img is not None:
-                return img, False
-
-        # 3. 回退到旧项目映射(优先使用组合贴图)
-        fallback_map = {
-            ("A", "A_group_one"): ("moduleA1.png", False),
-            ("A", "A_group_two"): ("moduleA2.png", False),
-            ("A", "A_group_three"): ("moduleA3.png", False),
-            ("B", "B0"): ("moduleB.png", False),
-            ("B", "B_compact"): ("moduleB.png", False),
-            ("B", "B_quad_cluster"): ("moduleB1.png", False),
-            ("B", "B_row_pair"): ("moduleB2.png", False),
-            ("B", "B_single"): ("moduleBsingle.png", False),
-            ("C", "C_quad"): ("moduleCsingle.png", False),
-            ("C", "C_pair"): ("moduleCsingle.png", False),
-            ("D", "D0"): ("moduleD.png", False),
-            ("D", "D1"): ("moduleD1.png", False),
-            ("D", "D_single"): ("moduleDsingle.png", False),
-            ("E", "E_pair"): ("moduleE1.png", False),
-            ("E", "E_single"): ("moduleEsingle.png", False),
-            ("F", "F1"): ("moduleF1.png", False),
-            ("F", "F_single"): ("moduleFsingle.png", False),
-            ("G", "G_single"): ("moduleGsingle.png", False),
-        }
-        if (module_id, group_type) in fallback_map:
-            filename, _ = fallback_map[(module_id, group_type)]
-            img = self._try_filenames(filename)
-            if img is not None:
-                return img, False
-
-        # 4. 最后尝试 module_id + single / 通用文件名
-        generic = {
-            "A": "moduleA1.png",
-            "B": "moduleB.png",
-            "C": "moduleCsingle.png",
-            "D": "moduleD.png",
-            "E": "moduleEsingle.png",
-            "F": "moduleFsingle.png",
-            "G": "moduleGsingle.png",
-        }
-        img = self._try_filenames(generic.get(module_id, ""))
-        if img is not None:
-            return img, False
-
-        return None, False
 
     def apply_texture(
         self,
@@ -209,7 +141,10 @@ class TextureHandler:
             extent=[x, x + width, y, y + height],
             aspect="auto",
             alpha=alpha,
-            interpolation="nearest",
+            # Thin bed outlines can fall between sampled pixels at site scale.
+            # Area filtering preserves their coverage instead of dropping them.
+            interpolation="hanning",
+            resample=True,
             origin="upper",
             zorder=2,
         )
@@ -272,21 +207,6 @@ def _figure_size(length_m: float, width_m: float):
             scale = max_size / val
             fw, fh = fw * scale, fh * scale
     return fw, fh
-
-
-def _group_texture_keys(module_id: str, group_type: str) -> bool:
-    """判断某 group_type 是否使用组合贴图(整张 group 一张图)。"""
-    combo_types = {
-        "A_group_one",
-        "A_group_two",
-        "A_group_three",
-        "B0",
-        "B_compact",
-        "B_quad_cluster",
-        "B_row_pair",
-        "B_single",
-    }
-    return group_type in combo_types
 
 
 def _render_layout_inner(

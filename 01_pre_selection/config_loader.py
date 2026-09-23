@@ -1,8 +1,9 @@
 """YAML配置文件加载器 - 从configs/目录加载模块、群组和建筑配置"""
-import os
 from pathlib import Path
 from typing import Dict, List, Optional
 import yaml
+from functools import lru_cache
+from copy import deepcopy
 
 # 项目根目录
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -21,10 +22,17 @@ def _resolve_case_insensitive(directory: Path, filename: str) -> Path:
     return exact
 
 
-def load_yaml(filepath: Path) -> dict:
-    """加载单个YAML文件"""
+@lru_cache(maxsize=64)
+def _load_yaml_version(filepath, modified, size):
     with open(filepath, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f)
+
+
+def load_yaml(filepath: Path) -> dict:
+    """Cache parsed YAML; file edits invalidate the cache and callers own copies."""
+    filepath = Path(filepath)
+    stat = filepath.stat()
+    return deepcopy(_load_yaml_version(str(filepath.resolve()), stat.st_mtime_ns, stat.st_size))
 
 
 def load_module_config(module_id: str) -> dict:
@@ -53,32 +61,12 @@ def load_group_config(module_id: str) -> dict:
     return load_yaml(filepath)
 
 
-def load_all_group_configs() -> Dict[str, dict]:
-    """加载所有群组配置"""
-    groups = {}
-    group_dir = CONFIG_ROOT / "groups"
-    for filepath in sorted(group_dir.glob("group_*.yaml")):
-        config = load_yaml(filepath)
-        groups[config['module_id']] = config
-    return groups
-
-
 def load_building_config(building_id: str) -> dict:
     """加载建筑配置"""
     filepath = _resolve_case_insensitive(CONFIG_ROOT / "buildings", f"{building_id}.yaml")
     if not filepath.exists():
         raise FileNotFoundError(f"建筑配置文件不存在: {filepath}")
     return load_yaml(filepath)
-
-
-def load_all_building_configs() -> Dict[str, dict]:
-    """加载所有建筑配置"""
-    buildings = {}
-    building_dir = CONFIG_ROOT / "buildings"
-    for filepath in sorted(building_dir.glob("*.yaml")):
-        config = load_yaml(filepath)
-        buildings[config['id']] = config
-    return buildings
 
 
 def get_module_catalog() -> List[dict]:
@@ -101,18 +89,6 @@ def get_module_catalog() -> List[dict]:
             'color': (config.get('visual') or {}).get('color', '#444444'),
         })
     return catalog
-
-
-def get_module_beds_layout(module_id: str) -> List[dict]:
-    """获取模块的床位布局"""
-    config = load_module_config(module_id)
-    return config.get('beds_layout', [])
-
-
-def get_module_road_areas(module_id: str) -> List[dict]:
-    """获取模块的通道区域"""
-    config = load_module_config(module_id)
-    return config.get('road_areas', [])
 
 
 # --------------------------------------------------------------------------- #
@@ -146,11 +122,6 @@ def get_group_def_by_type(module_id: str, group_type: str) -> Optional[dict]:
     return None
 
 
-def get_group_types(module_id: str) -> List[str]:
-    """列出某模块的所有 group_type。"""
-    return [g['group_type'] for g in get_group_defs(module_id)]
-
-
 def get_decompose_to(module_id: str, group_type: str) -> Optional[str]:
     """取群组的降级目标 group_type, 无则返回 None。"""
     g = get_group_def_by_type(module_id, group_type)
@@ -160,29 +131,6 @@ def get_decompose_to(module_id: str, group_type: str) -> Optional[str]:
     if dt in (None, 'null', 'None', ''):
         return None
     return dt
-
-
-def get_decompose_chain(module_id: str, group_type: str) -> List[str]:
-    """获取完整降级链: [group_type, decompose_to, ...] 直到 None。"""
-    chain = [group_type]
-    seen = {group_type}
-    current = group_type
-    while True:
-        nxt = get_decompose_to(module_id, current)
-        if nxt is None or nxt in seen:
-            break
-        chain.append(nxt)
-        seen.add(nxt)
-        current = nxt
-    return chain
-
-
-def get_sub_groups(module_id: str, group_type: str) -> List[str]:
-    """取群组声明的 sub_groups 备选列表(E 模块用)。"""
-    g = get_group_def_by_type(module_id, group_type)
-    if not g:
-        return []
-    return list(g.get('sub_groups', []) or [])
 
 
 # --------------------------------------------------------------------------- #

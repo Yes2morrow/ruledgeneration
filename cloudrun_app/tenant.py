@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import os
+import hashlib
 from typing import Iterable
 
 # 允许接入的小程序 appid 白名单(逗号分隔)。为空表示不限制, 仅建议开发期使用。
@@ -58,10 +59,18 @@ def read_tenant(request) -> dict:
 
 def assert_allowed(tenant: dict) -> None:
     """appid 白名单校验。未通过时抛 PermissionError。"""
-    if not _ALLOWED_APPIDS:
-        return
-    if tenant.get("appid") not in _ALLOWED_APPIDS:
+    if _ALLOWED_APPIDS and tenant.get("appid") not in _ALLOWED_APPIDS:
         raise PermissionError("小程序未授权")
+    if not tenant.get('authenticated') or tenant.get('appid') == 'unknown':
+        raise PermissionError('缺少微信用户身份，请通过小程序访问')
+
+
+def owner_key(tenant: dict) -> str:
+    if tenant.get('owner'):
+        return tenant['owner']
+    # AppID remains part of the authorization boundary, including UnionID users.
+    raw = f"{tenant['appid']}:{tenant.get('userKey', '')}"
+    return hashlib.sha256(raw.encode('utf-8')).hexdigest()
 
 
 def header_names(request) -> list:

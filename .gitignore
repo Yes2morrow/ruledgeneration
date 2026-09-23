@@ -47,3 +47,4 @@ tmp_*/
 # Local render/test output
 _render_test.png
 04_test/*_output.png
+*.af~lock~

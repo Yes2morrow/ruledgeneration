@@ -3,7 +3,7 @@
 Only configured aisles are traversable inside modules. An opening against a
 wall cannot be rescued by a route through another opening around that wall.
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import lru_cache
 import shapely
 import numpy as np
@@ -79,11 +79,101 @@ class RoadNetwork:
         self.obstacles = unary_union([g[0] for g in self.items])
         self._trial = None
         self._ports = {}
+        self._opening_templates = {}
+        self._bounds = np.asarray([item[0].bounds for item in self.items], dtype=float).reshape(-1, 4)
+        self._rectangular_site = self.site.equals(box(*self.site.bounds))
+
+    def _opening_bounds(self, module):
+        key = (id(module.config), module.rotation, module.mirror)
+        if key not in self._opening_templates:
+            geometry = self._geometry(replace(module, x=0.0, y=0.0))
+            ports = [p for mouths in geometry[3] for p in mouths]
+            self._opening_templates[key] = (
+                np.asarray([p.bounds for p in ports], dtype=float).reshape(-1, 4),
+                np.asarray([_opening_apron(p, geometry[0], self.width).bounds for p in ports],
+                           dtype=float).reshape(-1, 4))
+        offset = np.array([module.x, module.y, module.x, module.y])
+        return tuple(np.round(bounds + offset, 3) for bounds in self._opening_templates[key])
+
+    def _obviously_blocked_opening(self, modules):
+        """Conservative rejection before allocating translated polygons.
+
+        Untouched straight mouths require their whole rectangular landing.
+        Touching mouths (including partial shared openings), off-grid modules
+        and concave site boundaries still use the full topology checks below.
+        """
+        if not modules or any(abs(v / GRID_M - round(v / GRID_M)) > 1e-6
+                              for m in modules for v in (m.x, m.y)):
+            return False
+        added = np.asarray([(m.x, m.y, m.x + m.occ_length_m, m.y + m.occ_width_m)
+                            for m in modules])
+        obstacles = np.concatenate((self._bounds, np.round(added, 3)))
+        new_openings = [self._opening_bounds(m) for m in modules]
+        for index, module in enumerate(modules):
+            ports, aprons = new_openings[index]
+            other_ids = np.delete(np.arange(len(obstacles)), len(self.items) + index)
+            others = obstacles[other_ids]
+            for port, apron in zip(ports, aprons):
+                touch = (np.maximum(port[:2], others[:, :2]) <=
+                         np.minimum(port[2:], others[:, 2:]) + EPS).all(axis=1)
+                if np.any(touch):
+                    # If a mouth touches a wall, total shared opening length
+                    # below the minimum cannot pass the full contact check.
+                    # Ambiguous/partially shared contacts still fall through.
+                    axis = 1 if abs(port[0] - port[2]) < EPS else 0
+                    for other_id in other_ids[touch]:
+                        rect = obstacles[other_id]
+                        contact = min(port[axis+2], rect[axis+2]) - max(port[axis], rect[axis])
+                        if contact <= EPS:
+                            continue
+                        if other_id < len(self.items):
+                            other_ports = np.asarray([p.bounds for mouths in self.items[other_id][3]
+                                                      for p in mouths]).reshape(-1, 4)
+                        else:
+                            other_ports = new_openings[other_id-len(self.items)][0]
+                        overlap = np.minimum(port[2:], other_ports[:, 2:]) - np.maximum(port[:2], other_ports[:, :2])
+                        shared = np.maximum(overlap[(overlap >= -EPS).all(axis=1), axis], 0).sum()
+                        if shared < self.width-GRID_M:
+                            return True
+                    continue
+                if self._rectangular_site:
+                    left, bottom, right, top = self.site.bounds
+                    if apron[0] < left-EPS or apron[1] < bottom-EPS or apron[2] > right+EPS or apron[3] > top+EPS:
+                        return True
+                overlap = np.minimum(apron[2:], others[:, 2:]) - np.maximum(apron[:2], others[:, :2])
+                if np.any(np.prod(np.maximum(overlap, 0), axis=1) > EPS):
+                    return True
+        return False
 
     def _geometry(self, module):
         key = (id(module.config), module.x, module.y, module.rotation, module.mirror)
         if key in self._cache:
             return self._cache[key]
+
+        # On the millimetre grid, translation preserves all aisle/bed incidence
+        # and side openings. Reuse the origin template instead of rebuilding its
+        # polygons, unions and intersections for every rejected dense candidate.
+        # Off-grid positions retain the scalar path (rounding need not commute).
+        if ((module.x != 0 or module.y != 0)
+                and abs(module.x / GRID_M - round(module.x / GRID_M)) < 1e-6
+                and abs(module.y / GRID_M - round(module.y / GRID_M)) < 1e-6):
+            source = self._geometry(replace(module, x=0.0, y=0.0))
+            # Translate the whole template in one vectorized operation. Each
+            # rejected candidate used to dispatch transform/precision per bed,
+            # aisle and port, hundreds of thousands of times for a dense cart.
+            flat = [source[0], *source[1], *source[2],
+                    *(g for ports in source[3] for g in ports), *source[4]]
+            shifted = iter(shapely.set_precision(shapely.transform(
+                np.asarray(flat, dtype=object),
+                lambda xy: xy + (module.x, module.y)), GRID_M))
+            item = (next(shifted), [next(shifted) for _ in source[1]],
+                    [next(shifted) for _ in source[2]],
+                    [[next(shifted) for _ in ports] for ports in source[3]],
+                    tuple(next(shifted) for _ in source[4]), source[5])
+            if len(self._cache) >= 1024:
+                self._cache.clear()
+            self._cache[key] = item
+            return item
 
         def shape(points):
             poly, _ = transform_module_polygon(points, module.length_mm, module.width_mm,
@@ -108,6 +198,9 @@ class RoadNetwork:
         return item
 
     def evaluate(self, new_modules=(), *, include_roads=True):
+        if not include_roads and self._obviously_blocked_opening(new_modules):
+            self._trial = None
+            return RoadCheck(opening_errors=[{'reason': '开口前方公共道路不足或被模块挤窄'}])
         added = [self._geometry(m) for m in new_modules]
         items = self.items + added
         self._trial = None
@@ -235,4 +328,5 @@ class RoadNetwork:
             self._ports = {}
         self.items.extend(added)
         self.obstacles = obstacles
+        self._bounds = np.asarray([item[0].bounds for item in self.items], dtype=float).reshape(-1, 4)
         self._trial = None

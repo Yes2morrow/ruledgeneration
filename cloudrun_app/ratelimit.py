@@ -25,6 +25,11 @@ class SlidingWindowLimiter:
     def allow(self, key: str) -> bool:
         now = time.monotonic()
         with self._lock:
+            if key not in self._hits and len(self._hits) >= self.max_keys:
+                for k in [k for k, v in self._hits.items() if not v or now-v[-1] > self.window]:
+                    self._hits.pop(k, None)
+                if len(self._hits) >= self.max_keys:
+                    return False
             q = self._hits[key]
             while q and now - q[0] > self.window:
                 q.popleft()

@@ -3,12 +3,16 @@ FROM python:3.10-slim
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
+    APP_ENV=production \
     PYTHONUNBUFFERED=1 \
     MPLBACKEND=Agg \
     MPLCONFIGDIR=/tmp/mplconfig \
     PORT=8080 \
     UVICORN_WORKERS=2 \
-    UVICORN_LIMIT_CONCURRENCY=8
+    MAX_INFLIGHT=1 \
+    UVICORN_LIMIT_CONCURRENCY=32 \
+    OPENBLAS_NUM_THREADS=1 \
+    OMP_NUM_THREADS=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-wqy-zenhei \
@@ -42,5 +46,5 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
 CMD ["sh", "-c", "uvicorn cloudrun_app.main:app \
   --host 0.0.0.0 --port ${PORT:-8080} \
   --workers ${UVICORN_WORKERS:-2} \
-  --limit-concurrency ${UVICORN_LIMIT_CONCURRENCY:-8} \
+  --limit-concurrency ${UVICORN_LIMIT_CONCURRENCY:-32} \
   --timeout-keep-alive 30"]

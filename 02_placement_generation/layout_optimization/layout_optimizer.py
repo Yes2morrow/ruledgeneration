@@ -9,13 +9,15 @@
 
 道路判定:
   模块内仅配置通道可通行，每个真实开口必须接入同一公共道路。
-  公共道路优先 1.2m，空间受限时重试 1.0m；内部通道保持原设计。
+  公共道路不低于 1.2m；内部通道保持原设计，邻近床位校验实际绕行。
 """
 from __future__ import annotations
 
 import sys
+from copy import copy
+from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List
 
 _LAYOUT_DIR = Path(__file__).resolve().parent
 _PLACEMENT = _LAYOUT_DIR.parent
@@ -39,14 +41,15 @@ from geometry import (  # noqa: E402
     normalize_mirror,
     normalize_rotation,
     group_grid_geometry,
-    polygon_bbox,
     transform_direction,
     transform_module_polygon,
 )
 from group_organizer import decompose_group, organize_groups  # noqa: E402
-from position_finder import calculate_group_size, find_best_position  # noqa: E402
+from position_finder import find_best_position, can_place  # noqa: E402
 
 from road_connectivity import RoadNetwork  # noqa: E402
+from circulation_paths import (audit_bed_routes, repair_corridor, PUBLIC_WIDTH_M,
+                               MAX_REPAIR_ROUNDS)  # noqa: E402
 
 
 def _build_group_contents(
@@ -164,13 +167,130 @@ def _polygon_area(polygon) -> float:
     return abs(s) / 2.0
 
 
+def _align_remainder_columns(groups, modules, beds, network, site, reserved, width):
+    """Straighten a minority of remainder rows after a feasible packing exists.
+
+    Large configured groups establish the packing; smaller decomposed groups
+    sometimes attach to a neighbouring wall instead of following their own
+    column. Move only to an existing majority line, retaining every module.
+    """
+    largest = {g.module_id: max(p.module_count for p in groups if p.module_id == g.module_id)
+               for g in groups}
+    columns = defaultdict(list)
+    for index, group in enumerate(groups):
+        if group.module_count < largest[group.module_id]:
+            across = group.width_m if group.rotated else group.length_m
+            columns[group.module_id, group.rotated, round(across, 3)].append(index)
+    moves = []
+    for indices in columns.values():
+        lines = Counter(round(groups[i].y if groups[i].rotated else groups[i].x, 3) for i in indices)
+        target, count = lines.most_common(1)[0]
+        if count < 2 or count * 2 <= len(indices):
+            continue
+        moves.extend((i, target) for i in indices
+                     if abs((groups[i].y if groups[i].rotated else groups[i].x) - target) > .001)
+    if not moves or not network.evaluate().valid or not audit_bed_routes(network)['route_access_valid']:
+        return groups, modules, beds, network
+    for index, target in moves:
+        group = groups[index]
+        others = groups[:index] + groups[index + 1:]
+        x, y = (group.x, target) if group.rotated else (target, group.y)
+        rect = (x, y, group.length_m, group.width_m)
+        if not can_place(rect, others, site, group._group_def):
+            continue
+        if any(x < rx+rw-1e-9 and x+group.length_m > rx+1e-9
+               and y < ry+rh-1e-9 and y+group.width_m > ry+1e-9 for rx, ry, rw, rh in reserved):
+            continue
+        updated = copy(group)
+        updated.x, updated.y = x, y
+        updated.modules, group_beds, group_roads = [], [], []
+        _build_group_contents(group._group_def, group.modules[0].config, x, y, group.rotated,
+                              updated.modules, group_beds, group_roads)
+        proposed = list(groups)
+        proposed[index] = updated
+        trial_modules = [m for g in proposed for m in g.modules]
+        trial = RoadNetwork(site, trial_modules, public_width_m=width)
+        if not trial.evaluate().valid or not audit_bed_routes(trial)['route_access_valid']:
+            continue
+        groups, modules, network = proposed, trial_modules, trial
+        beds = []
+        for g in groups:
+            _build_group_contents(g._group_def, g.modules[0].config, g.x, g.y, g.rotated,
+                                  [], beds, [])
+    return groups, modules, beds, network
+
+
+def _align_supplemental_singles(groups, modules, beds, network, site, reserved, width):
+    """Locally align a stranded remainder only if the whole plan stays valid.
+
+    Do this after finding a feasible plan: changing early packing decisions can
+    move the corridor repair and lose an otherwise feasible bed combination.
+    """
+    targets = []
+    for index, group in enumerate(groups):
+        if group.module_count != 1:
+            continue
+        peers = [g for g in groups if g.module_id == group.module_id and g.module_count > 1]
+        if not peers:
+            continue
+        rotated = sum(g.module_count for g in peers if g.rotated)
+        normal = sum(g.module_count for g in peers if not g.rotated)
+        if rotated != normal and group.rotated != (rotated > normal):
+            targets.append((index, rotated > normal))
+    if not targets or not network.evaluate().valid or not audit_bed_routes(network)['route_access_valid']:
+        return groups, modules, beds, network
+    for index, preferred in targets:
+        group = groups[index]
+        others = groups[:index] + groups[index + 1:]
+        remaining = [m for g in others for m in g.modules]
+        trial_base = RoadNetwork(site, remaining, public_width_m=width)
+        definition = dict(group._group_def, _align_supplement=True)
+        config = group.modules[0].config
+        accepted, attempts = None, 0
+        def valid(candidate):
+            nonlocal accepted, attempts
+            x, y, rotated, _, _ = candidate
+            if rotated != preferred or attempts >= 32:
+                return False
+            attempts += 1
+            content = ([], [], [])
+            _build_group_contents(definition, config, x, y, rotated, *content)
+            if not trial_base.evaluate(content[0], include_roads=False).valid:
+                return False
+            complete = RoadNetwork(site, remaining + content[0], public_width_m=width)
+            if not audit_bed_routes(complete)['route_access_valid']:
+                return False
+            accepted = content
+            return True
+        position = find_best_position(definition, config, others, site, candidate_validator=valid,
+                                      clearance_m=width, reserved_rects=reserved)
+        if position is None:
+            continue
+        updated = copy(group)
+        updated.x, updated.y, updated.rotated, updated.length_m, updated.width_m = position
+        updated.modules = accepted[0]
+        groups = list(groups)
+        groups[index] = updated
+        # Keep bed ordering identical to group/module order for diagnostics.
+        modules, beds = [], []
+        for g in groups:
+            rebuilt, group_beds, group_roads = [], [], []
+            _build_group_contents(g._group_def, g.modules[0].config, g.x, g.y, g.rotated,
+                                  rebuilt, group_beds, group_roads)
+            modules.extend(rebuilt)
+            beds.extend(group_beds)
+        network = RoadNetwork(site, modules, public_width_m=width)
+    return groups, modules, beds, network
+
+
 def calculate_layout(
     modules_selection: Dict[str, int],
     site_polygon,
     allow_decompose: bool = True,
     road_check: bool = True,
     public_road_width_m: float = 1.2,
-    allow_width_fallback: bool = True,
+    allow_width_fallback: bool = False,
+    _reserved_corridors=(),
 ) -> LayoutResult:
     """主排布入口。
 
@@ -180,7 +300,12 @@ def calculate_layout(
     :param road_check: 是否在候选放置时过滤堵路方案；最终连通检查始终执行
     :return: LayoutResult
     """
+    from compute_budget import check_budget
+    check_budget()
     site_polygon = [tuple(p) for p in site_polygon]
+    if public_road_width_m < PUBLIC_WIDTH_M:
+        raise ValueError('公共通道净宽不能小于 1.2 米')
+    main_corridors = list(_reserved_corridors)
 
     # 1. 分解为群组实例
     pending: List[dict] = []
@@ -202,9 +327,13 @@ def calculate_layout(
     module_cache: Dict[str, dict] = {}
 
     connectivity_candidates_checked = 0
+    # At a fixed placement state, identical groups have identical feasibility.
+    # Oversized capacity probes otherwise repeat the same expensive failed search.
+    failed_positions = set()
     network = RoadNetwork(site_polygon, public_width_m=public_road_width_m)
     i = 0
     while i < len(pending):
+        check_budget()
         group_def = pending[i]
         module_id = group_def["module_id"]
         group_type = group_def["group_type"]
@@ -227,10 +356,14 @@ def calculate_layout(
             accepted_contents = (trial_modules, trial_beds, trial_roads)
             return True
 
-        result = find_best_position(group_def, module_config, placed_groups, site_polygon,
-                                    candidate_validator=preserves_access if road_check else None,
-                                    clearance_m=public_road_width_m if road_check else 0)
-        if result is None and road_check:
+        failure_key = (module_id, group_type, len(placed_groups))
+        known_failure = failure_key in failed_positions
+        result = None if known_failure else find_best_position(
+            group_def, module_config, placed_groups, site_polygon,
+            candidate_validator=preserves_access if road_check else None,
+            clearance_m=public_road_width_m if road_check else 0,
+            reserved_rects=main_corridors)
+        if result is None and road_check and not known_failure:
             # Opposite-facing entrances may be the only route into a concave lobe.
             # Reuse quarter-turn geometry instead of adding another layout engine.
             original = group_def
@@ -240,10 +373,12 @@ def calculate_layout(
                 rotation=(normalize_rotation(entry.get('rotation'))+180) % 360)
                 for entry in original.get('arrangement', [])])
             result = find_best_position(group_def, module_config, placed_groups, site_polygon,
-                                        candidate_validator=preserves_access, clearance_m=public_road_width_m)
+                                        candidate_validator=preserves_access, clearance_m=public_road_width_m,
+                                        reserved_rects=main_corridors)
             if result is None:
                 group_def = original
         if result is None:
+            failed_positions.add(failure_key)
             # 尝试降级
             if allow_decompose:
                 fallback = decompose_group(module_id, group_type)
@@ -295,8 +430,15 @@ def calculate_layout(
 
     # Always audit the final layout, including when candidate filtering is disabled.
     # No fabricated perimeter rectangles or whole-site polygons can mask blockage.
+    if road_check and not unplaced:
+        placed_groups, placed_modules, beds, network = _align_remainder_columns(
+            placed_groups, placed_modules, beds, network, site_polygon, main_corridors, public_road_width_m)
+        placed_groups, placed_modules, beds, network = _align_supplemental_singles(
+            placed_groups, placed_modules, beds, network, site_polygon, main_corridors, public_road_width_m)
     checked = network.evaluate()
     roads = checked.roads
+    for x, y, w, h in main_corridors:
+        roads.append(RoadArea(name='贯通主通道', polygon_m=[(x,y),(x+w,y),(x+w,y+h),(x,y+h)], source='main'))
     metrics = _compute_metrics(placed_groups, beds, site_polygon, roads)
     no_access = [dict(module_id=beds[index].module_id, bed_id=beds[index].bed_id,
                       group_type=beds[index].group_type, layout_bed_index=index + 1)
@@ -311,13 +453,19 @@ def calculate_layout(
         road_model="explicit_aisles_and_public_clearance",
         public_road_width_m=public_road_width_m,
         road_width_reduced=False,
+        main_corridor_width_m=PUBLIC_WIDTH_M,
+        main_corridor_count=len(main_corridors),
+        main_corridors=[{'x': x, 'y': y, 'width': w, 'height': h} for x, y, w, h in main_corridors],
         road_opening_errors=checked.opening_errors,
         road_opening_errors_count=len(checked.opening_errors),
         connectivity_candidates_checked=connectivity_candidates_checked,
         beds_without_road_access=no_access,
         beds_without_road_access_count=len(no_access),
     )
-    success = not unplaced and checked.valid
+    path_check = (audit_bed_routes(network) if checked.valid and not unplaced else
+                  {'route_access_valid': False, 'route_audit_skipped': '布局不完整或通道未连通'})
+    metrics.update(path_check)
+    success = not unplaced and checked.valid and path_check['route_access_valid']
     messages = []
     if unplaced:
         messages.append(f"未能在边界、不重叠及道路连通约束下放置 {len(unplaced)} 个群组")
@@ -325,6 +473,8 @@ def calculate_layout(
         messages.append(f"{len(no_access)} 张床的内部通道未接入主路")
     if checked.opening_errors:
         messages.append(f"{len(checked.opening_errors)} 处通道开口或直接连接未通过检查")
+    if checked.valid and not unplaced and not path_check['route_access_valid']:
+        messages.append(path_check.get('route_error', '邻近床位实际路径绕行超出 20 米，请减少模块或调整场地'))
     message = "；".join(messages)
 
     layout = LayoutResult(
@@ -337,13 +487,12 @@ def calculate_layout(
         message=message,
         unplaced=unplaced,
     )
-    if road_check and unplaced and allow_width_fallback and public_road_width_m > 1.0:
-        narrower = calculate_layout(modules_selection, site_polygon, allow_decompose, road_check,
-                                    public_road_width_m=1.0, allow_width_fallback=False)
-        if narrower.metrics.get('road_connected') and len(narrower.beds) > len(layout.beds):
-            narrower.metrics['road_width_reduced'] = True
-            narrower.message = f'{public_road_width_m:g} 米道路方案未放下全部模块，已采用 1.0 米公共道路。' + narrower.message
-            return narrower
+    if (road_check and not unplaced and checked.valid and not path_check['route_access_valid']
+            and len(main_corridors) < MAX_REPAIR_ROUNDS):
+        corridor = repair_corridor(site_polygon, path_check.get('route_failures', []), main_corridors)
+        if corridor:
+            return calculate_layout(modules_selection, site_polygon, allow_decompose, road_check,
+                                    public_road_width_m, False, (*main_corridors, corridor))
     return layout
 
 

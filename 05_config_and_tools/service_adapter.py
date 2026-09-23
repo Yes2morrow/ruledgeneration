@@ -26,10 +26,10 @@ def create_run_id(prefix: str = "run") -> str:
 
     原实现为 f"{prefix}_{strftime('%Y%m%d_%H%M%S')}", 只精确到秒,
     多个小程序同秒并发请求会撞 ID, 导致产物文件互相覆盖。
-    现追加 8 位 uuid4 十六进制串。
+    现追加完整 uuid4 十六进制串，避免短编号被枚举。
     """
     ts = datetime.now(_CST).strftime("%Y%m%d_%H%M%S")
-    return f"{prefix}_{ts}_{uuid.uuid4().hex[:8]}"
+    return f"{prefix}_{ts}_{uuid.uuid4().hex}"
 
 _CURRENT = Path(__file__).resolve().parent
 _RULE_ROOT = _CURRENT.parent
@@ -41,7 +41,7 @@ for _sub in (
     if str(_sub) not in sys.path:
         sys.path.insert(0, str(_sub))
 
-from config_loader import get_module_catalog, load_all_module_configs, load_module_config  # noqa: E402
+from config_loader import load_all_module_configs  # noqa: E402
 from layout_optimizer import calculate_layout, layout_result_to_dict  # noqa: E402
 from renderer import render_layout  # noqa: E402
 
@@ -65,25 +65,41 @@ def normalize_selected_modules(selected_modules=None) -> Dict[str, int]:
     if not selected_modules:
         return normalized
 
+    def checked_quantity(code, value):
+        if code not in configs:
+            raise ValueError(f'未知模块: {code}')
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+            raise ValueError(f'{code} 模块数量必须是非负整数')
+        if value > 2000:
+            raise ValueError(f'{code} 模块数量不能超过 2000')
+        if not float(value).is_integer():
+            raise ValueError(f'{code} 模块数量必须是非负整数')
+        return int(value)
+
     if isinstance(selected_modules, dict):
         items = selected_modules.items()
         for code, qty in items:
             c = str(code).upper()
-            if c not in configs:
-                continue
-            q = int(qty)
+            q = checked_quantity(c, qty)
             if q > 0:
                 normalized[c] = q
         return normalized
 
     if isinstance(selected_modules, list):
+        if len(selected_modules) > len(configs):
+            raise ValueError('模块列表过长或含重复模块')
+        seen = set()
         for item in selected_modules:
             if not isinstance(item, dict):
-                continue
-            code = str(item.get("code") or item.get("module", {}).get("name") or "").upper()
-            if code not in configs:
-                continue
-            q = int(item.get("quantity", 0))
+                raise ValueError('模块列表条目必须是对象')
+            module = item.get('module') or {}
+            if not isinstance(module, dict):
+                raise ValueError('模块描述必须是对象')
+            code = str(item.get("code") or module.get("name") or "").upper()
+            if code in seen:
+                raise ValueError('模块列表含重复模块')
+            seen.add(code)
+            q = checked_quantity(code, item.get("quantity", 0))
             if q > 0:
                 normalized[code] = q
         return normalized
@@ -165,6 +181,7 @@ def _run_layout_and_render(
     run_id: str,
     progress_callback=None,
     render_structure: bool = True,
+    finalize: bool = True,
 ) -> dict:
     """执行排布 + 渲染, 返回 layout + 输出文件信息。
 
@@ -173,7 +190,12 @@ def _run_layout_and_render(
     """
     cb = progress_callback or _noop
     cb("开始计算布局")
-    result = calculate_layout(selected_modules, site_polygon, allow_decompose=True, road_check=True)
+    from capacity_service import checked_layout, check_cart
+    result = checked_layout(selected_modules, site_polygon, finalize=finalize)
+    if not result.success or result.unplaced:
+        xs, ys = zip(*site_polygon)
+        validation = check_cart(max(xs) - min(xs), max(ys) - min(ys), selected_modules)
+        raise ValueError(validation['message'])
     cb(f"布局计算完成: 放置 {len(result.groups)} 个群组, {len(result.beds)} 张床")
     payload = layout_result_to_dict(result)
 
@@ -220,8 +242,10 @@ def generate_plan_payload(
 ) -> dict:
     """generate 模式: 用户已指定模块, 直接排布。"""
     from module_selector import build_recommendation_profile, validate_inputs
+    from capacity_service import validate_dimensions
 
     cb = progress_callback or _noop
+    validate_dimensions(length, width)
     area = float(length) * float(width)
     cb("校验输入参数")
     validate_inputs(int(evacuees), area, int(days))
@@ -263,6 +287,7 @@ def generate_plan_payload(
         "mode": "generate",
         "site": {"evacuees": int(evacuees), "length": float(length), "width": float(width), "days": int(days), "area": area},
         "spaceType": space_type,
+        "strategy": {"key": strategy_key or "", "label": _STRATEGY_LABEL.get(strategy_key or "", "自动推荐")},
         "recommendationProfile": profile,
         "selectedModules": selected,
         "selectionSummary": summary,
@@ -282,6 +307,7 @@ def generate_recommendation_payload(
     run_id: Optional[str] = None,
     progress_callback=None,
     render_structure: bool = True,
+    preview_only: bool = False,
 ) -> dict:
     """recommend 模式: 自动选择模块再排布。
 
@@ -289,6 +315,7 @@ def generate_recommendation_payload(
     """
     from config_loader import get_site_polygon
     from module_selector import build_recommendation_profile, select_modules, validate_inputs
+    from capacity_service import checked_layout, site_capacity, validate_dimensions
 
     cb = progress_callback or _noop
 
@@ -296,6 +323,7 @@ def generate_recommendation_payload(
         raise ValueError("recommendation_mode 只支持 match_input / fill")
 
     cb("校验输入参数")
+    validate_dimensions(length, width)
     area = float(length) * float(width)
     validate_inputs(int(evacuees), area, int(days))
 
@@ -308,17 +336,27 @@ def generate_recommendation_payload(
 
     site = get_site_polygon(length_m=float(length), width_m=float(width))
     cb("自动选择模块组合")
-    selected = select_modules(int(evacuees), site, profile, recommendation_mode=recommendation_mode)
+    selected = select_modules(int(evacuees), site, profile, layout_runner=checked_layout,
+                              recommendation_mode=recommendation_mode)
     if not selected:
         raise ValueError("无法在当前场地推荐合适模块, 请增大场地或减少人数")
     cb(f"推荐模块: {selected}")
 
     issues = validate_selection_rules(selected)
     summary = summarize_selection(selected, int(evacuees))
+    if summary['totalBeds'] < int(evacuees):
+        capacity = site_capacity(float(length), float(width))
+        if capacity['maxEvacuees'] < int(evacuees):
+            raise ValueError(f'当前场地按现有排布规则最大可设定人数为 {capacity["maxEvacuees"]} 人，请减少人数或增大场地。')
+        # The preferred mix may be less dense than another verified configuration.
+        from module_selector import refine_bed_match, _modules_by_type
+        selected = refine_bed_match(capacity['capacitySelection'], int(evacuees), site,
+                                    _modules_by_type(profile['module_preferences']), checked_layout)
+        summary = summarize_selection(selected, int(evacuees))
     space_type = _infer_space_type(selected, profile["space_type"])
 
     run_id = run_id or create_run_id("rec")
-    out_dir = Path(output_dir) if output_dir else _RULE_ROOT / "06_output_results"
+    out_dir = None if preview_only else (Path(output_dir) if output_dir else _RULE_ROOT / "06_output_results")
 
     layout = _run_layout_and_render(
         selected,
@@ -327,6 +365,9 @@ def generate_recommendation_payload(
         run_id,
         progress_callback=cb,
         render_structure=render_structure,
+        # The cart needs verified quantities only. Defer visual tidying until
+        # a plan is requested so loading recommendations stays on the fast path.
+        finalize=not preview_only,
     )
 
     return {

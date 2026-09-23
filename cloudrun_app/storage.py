@@ -13,15 +13,23 @@ from __future__ import annotations
 import io
 import json
 import os
+import hmac
+import hashlib
+import secrets
+import tempfile
+import time
 from pathlib import Path
 from typing import Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit, unquote
 
 
 class StorageBackend:
     """存储后端接口。put_* 返回 {"url": ..., "fileId": ..., "key": ...}"""
 
     name = "base"
+
+    def refresh_url(self, url: str) -> str:
+        return url
 
     def put_file(self, local_path: Path, key: str, content_type: str = "application/octet-stream") -> dict:
         raise NotImplementedError
@@ -45,6 +53,19 @@ class LocalStorage(StorageBackend):
         self.root = root
         self.base_url = base_url.rstrip("/")
         self.root.mkdir(parents=True, exist_ok=True)
+        key_path = self.root / '.file-signing-key'
+        if not key_path.exists():
+            fd, temp = tempfile.mkstemp(dir=self.root)
+            try:
+                with os.fdopen(fd, 'wb') as stream:
+                    stream.write(secrets.token_bytes(32))
+                try:
+                    os.link(temp, key_path)
+                except FileExistsError:
+                    pass
+            finally:
+                os.unlink(temp)
+        self.signing_key = key_path.read_bytes()
 
     def put_file(self, local_path: Path, key: str, content_type: str = "application/octet-stream") -> dict:
         import shutil
@@ -65,7 +86,24 @@ class LocalStorage(StorageBackend):
     def _url(self, key: str) -> str:
         if not self.base_url:
             return ""
-        return f"{self.base_url}/api/runs/files/{quote(key)}"
+        expires = int(time.time()) + 7200
+        signature = self._signature(key, expires)
+        return f"{self.base_url}/api/runs/files/{quote(key)}?expires={expires}&signature={signature}"
+
+    def _signature(self, key, expires):
+        return hmac.new(self.signing_key, f'{key}:{expires}'.encode(), hashlib.sha256).hexdigest()
+
+    def verify_url(self, key, expires, signature):
+        return (key.startswith('plans/') and expires >= time.time()
+                and len(signature) == 64 and all(c in '0123456789abcdef' for c in signature)
+                and hmac.compare_digest(self._signature(key, expires), signature))
+
+    def refresh_url(self, url):
+        prefix = f'{self.base_url}/api/runs/files/'
+        if url.startswith(prefix):
+            key = unquote(urlsplit(url).path.split('/api/runs/files/', 1)[1])
+            return self._url(key)
+        return url
 
     def get_json(self, key: str) -> Optional[dict]:
         p = self.root / key
@@ -79,7 +117,16 @@ class LocalStorage(StorageBackend):
     def put_json(self, key: str, payload: dict) -> None:
         p = self.root / key
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        fd, temp = tempfile.mkstemp(dir=p.parent, suffix='.tmp')
+        try:
+            with os.fdopen(fd, 'w', encoding='utf-8') as stream:
+                json.dump(payload, stream, ensure_ascii=False)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temp, p)
+        finally:
+            if os.path.exists(temp):
+                os.unlink(temp)
 
 
 class CosStorage(StorageBackend):
@@ -122,6 +169,12 @@ class CosStorage(StorageBackend):
             Bucket=self.bucket, Key=key, Expired=self.ttl
         )
 
+    def refresh_url(self, url):
+        parsed = urlsplit(url)
+        if parsed.hostname == f'{self.bucket}.cos.{self.region}.myqcloud.com':
+            return self._sign(unquote(parsed.path.lstrip('/')))
+        return url
+
     def put_file(self, local_path: Path, key: str, content_type: str = "application/octet-stream") -> dict:
         self.client.put_object_from_local_file(
             Bucket=self.bucket,
@@ -141,8 +194,10 @@ class CosStorage(StorageBackend):
         try:
             resp = self.client.get_object(Bucket=self.bucket, Key=key)
             return json.loads(resp["Body"].get_raw_stream().read().decode("utf-8"))
-        except Exception:  # noqa: BLE001  COS 对象不存在会抛异常, 按 miss 处理
-            return None
+        except Exception as exc:
+            if callable(getattr(exc, 'get_status_code', None)) and exc.get_status_code() == 404:
+                return None
+            raise  # Credential/network failures must not masquerade as missing jobs.
 
     def put_json(self, key: str, payload: dict) -> None:
         self.put_bytes(
@@ -156,8 +211,10 @@ _COS_REQUIRED = ("COS_REGION", "COS_BUCKET", "TENCENTCLOUD_SECRETID", "TENCENTCL
 
 
 def build_storage(local_root: Path, base_url: str = "") -> StorageBackend:
-    """优先云存储; 环境变量不全时自动回落到本地盘(单实例模式)。"""
+    """未启用 COS 时使用本地盘；部分 COS 配置必须报错，不能静默降级。"""
     missing = [k for k in _COS_REQUIRED if not os.environ.get(k)]
     if not missing:
         return CosStorage()
+    if os.environ.get('COS_BUCKET') or os.environ.get('COS_REGION'):
+        raise RuntimeError('COS 配置不完整，缺少: ' + ', '.join(missing))
     return LocalStorage(local_root, base_url)

@@ -13,6 +13,26 @@ from position_finder import (find_best_position, calculate_group_size, _generate
 
 
 class PositionOptimizationTests(unittest.TestCase):
+    def test_batched_filter_preserves_clearance_candidates_and_validation_order(self):
+        site = [(0, 0), (30, 0), (30, 60), (0, 60)]
+        group, config = get_group_defs('D')[-1], load_module_config('D')
+        placed = [SimpleNamespace(rect=(x, y, 3.6, 1.8), _group_def=group)
+                  for x in (0, 5, 10, 15, 20) for y in (0, 5, 10, 15)]
+        for clearance in (1.0, 1.2):
+            reference = []
+            for rotated in (False, True):
+                w, h = calculate_group_size(group, config, rotated)
+                for x, y in _generate_candidates(placed, site, w, h, group, clearance):
+                    if can_place((x, y, w, h), placed, site, group):
+                        reference.append((x, y, rotated, w, h))
+            expected = sorted(reference, key=lambda c: _score(c, placed, site, group))
+            visited = []
+            result = find_best_position(group, config, placed, site,
+                                        candidate_validator=lambda c: visited.append(c) or False,
+                                        clearance_m=clearance)
+            self.assertIsNone(result)
+            self.assertEqual(visited, expected)
+
     def test_fast_filter_and_scoring_preserve_reference_best_position(self):
         rng = random.Random(20260922)
         sites = [[(0,0),(20,0),(20,20),(0,20)],

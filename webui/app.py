@@ -308,7 +308,7 @@ class LayoutRequest(BaseModel):
 async def module_catalog():
     """返回模块目录(含步长、床位、成本、颜色), 供前端购物车使用。
 
-    实际实现统一在 config_loader, service_adapter 仅做转发, 避免重复定义。
+    实际实现统一在 config_loader, 此接口直接调用，避免重复定义。
     """
     from config_loader import get_module_catalog
     return get_module_catalog()

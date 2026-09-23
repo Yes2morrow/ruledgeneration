@@ -1,0 +1,39 @@
+[
+  {
+    "case": "recommend_190_30x60_comfort_preview",
+    "seconds": 8.526,
+    "success": true,
+    "beds": 190,
+    "selection": {
+      "E": 61,
+      "B": 2,
+      "F": 1
+    }
+  },
+  {
+    "case": "cart_f62_b2",
+    "seconds": 8.039,
+    "success": true
+  },
+  {
+    "case": "final_190_cold",
+    "seconds": 3.529,
+    "success": true,
+    "beds": 190,
+    "route_access_valid": true,
+    "moved_groups": 7
+  },
+  {
+    "case": "final_190_cached",
+    "seconds": 0.005,
+    "success": true,
+    "beds": 190,
+    "route_access_valid": true,
+    "moved_groups": 7
+  },
+  {
+    "case": "cart_190_cached",
+    "seconds": 0.004,
+    "success": true
+  }
+]

@@ -1,3 +1,28 @@
+0.3.0 - 2026-09-23
+
+- Use verified geometry for site capacity, target-bed recommendations and cart
+  checks; speed up candidate screening and cache repeated calculations.
+- Tidy final layouts across all module types and orientations, preserving
+  quantities, module geometry, roads, openings and bed routes.
+- Defer visual tidying until final generation. Bound its search and runtime;
+  failures retain the feasible plan without caching the unfinished result.
+- Fix numerical precision that could falsely disconnect a valid aisle.
+- Include current async queue, storage, tenant/rate-limit and deployment
+  readiness checks, plus cleanup of unused legacy helpers and scripts.
+- Validation: 82 Python tests, 3 preview tests and 3 CLI end-to-end cases.
+- See docs/release-0.3.0.md for the actual 190-bed result and local timings.
+- Git release only; no CloudRun deployment.
+
+Unreleased - backend cleanup
+
+- Remove unused legacy group-texture rendering, compatibility catalog and dead
+  geometry/configuration helpers; preserve the active per-module render path.
+- Remove seven one-off/print-only test scripts. Keep 35 regression tests, three
+  end-to-end checks, preview checks, and local performance tools.
+- Make end-to-end output temporary; update the explicit HTTP smoke check for
+  asynchronous job submission/polling. Document the remaining test entry points.
+- Four representative layouts and PNGs match the 0.2.2 baseline byte-for-byte.
+
 0.2.2 - 2026-09-22
 
 - Fix concave containment, consistent quarter-turn transforms, per-module artwork

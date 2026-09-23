@@ -20,6 +20,23 @@ import matplotlib.pyplot as plt
 
 
 class PlanConsistencyTests(unittest.TestCase):
+    def test_downsampling_does_not_erase_thin_texture_lines(self):
+        # A subpixel bed outline must remain visible in a small module image.
+        source = np.ones((100, 100, 3))
+        source[:, 2] = 0
+        fig = plt.figure(figsize=(1, 1), dpi=30)
+        ax = fig.add_axes((0, 0, 1, 1))
+        try:
+            ax.set_axis_off()
+            renderer.TextureHandler().apply_texture(ax, 0, 0, 100, 100, source)
+            ax.set_xlim(0, 100)
+            ax.set_ylim(0, 100)
+            fig.canvas.draw()
+            pixels = np.asarray(fig.canvas.buffer_rgba())[:, :, :3]
+            self.assertLess(pixels.min(), 245)
+        finally:
+            plt.close(fig)
+
     def test_g_bed_four_faces_its_south_pillow_after_transforms(self):
         config = load_module_config('G')
         for mirror, normal, rotated in [
@@ -39,7 +56,7 @@ class PlanConsistencyTests(unittest.TestCase):
     def test_full_100_bed_plan_counts_match(self):
         with tempfile.TemporaryDirectory() as out:
             payload = generate_plan_payload(
-                100, 30, 45, 7, selected_modules={'A': 26, 'B': 4, 'C': 2, 'D': 4},
+                100, 30, 70, 7, selected_modules={'A': 26, 'B': 4, 'C': 2, 'D': 4},
                 output_dir=out, render_structure=False,
             )
         self.assertEqual(len(payload['layout']['beds']), 100)
@@ -48,27 +65,20 @@ class PlanConsistencyTests(unittest.TestCase):
         self.assertEqual(payload['summary']['unplacedBeds'], 0)
         self.assertTrue(payload['summary']['isEnough'])
 
-    def test_partial_plan_reports_placed_beds(self):
+    def test_partial_plan_is_rejected_before_rendering(self):
         with tempfile.TemporaryDirectory() as out:
-            payload = generate_plan_payload(
-                100, 20, 30, 7, selected_modules={'A': 26, 'B': 4, 'C': 2, 'D': 4},
-                output_dir=out, render_structure=False,
-            )
-        actual = len(payload['layout']['beds'])
-        self.assertLess(actual, 100)
-        self.assertEqual(payload['summary']['totalBeds'], actual)
-        self.assertEqual(payload['selectionSummary']['totalBeds'], 100)
-        self.assertEqual(payload['summary']['unplacedBeds'], 100 - actual)
-        self.assertFalse(payload['summary']['isEnough'])
-        public = to_v1_contract(payload, get_module_catalog(), {})
-        self.assertEqual(public['layout']['totalBeds'], actual)
-        self.assertEqual(public['summary']['totalBeds'], actual)
-        self.assertIn(str(actual), public['textSummary'])
-        self.assertEqual(public['recommendation']['summary']['totalBeds'], 100)
+            with self.assertRaisesRegex(ValueError, '最大模块数量'):
+                generate_plan_payload(
+                    100, 20, 30, 7, selected_modules={'A': 26, 'B': 4, 'C': 2, 'D': 4},
+                    output_dir=out, render_structure=False,
+                )
+            self.assertEqual(list(Path(out).iterdir()), [])
 
     def test_display_draws_one_texture_per_placed_module(self):
         result = calculate_layout(dict.fromkeys('ABCDEFG', 4), get_site_polygon(length_m=80, width_m=80))
-        self.assertTrue(result.success)
+        # Rendering counts are independent of a layout's path acceptance.
+        # Preserve every placed module even when an audit rejects the plan.
+        self.assertEqual(sum(len(g.modules) for g in result.groups), 28)
         saved = []
         with patch('matplotlib.figure.Figure.savefig', lambda fig, *a, **k: saved.append(fig)):
             renderer.render_layout(result, 'unused.png', show_structure=False)

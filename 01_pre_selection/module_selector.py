@@ -3,20 +3,19 @@
 设计原则: 简单 + 稳定 + 可解释。
   1. validate_inputs: 人均面积 >= 3 m²/人。
   2. build_recommendation_profile: 按密度分级(高/中/低) -> 空间类型 -> 模块偏好序。
-  3. select_modules: 贪心填充
+  3. select_modules: 贪心填充 + 精确余数匹配
      - 在偏好序的首选类型中, 选 priority 最高的模块, 按 step(最小 group module_count) 递增
      - 达到 evacuees 目标床位后, 用 calculate_layout 验证能否放下
-     - 放不下则按 step 递减, 直到放得下或归零; 归零则切到下一偏好类型
-     - 单类型不足时, 用次偏好类型的小模块补齐
+     - 放不下则参考实际放置量收缩数量，并通过试排验证
+     - 单类型不足时用次偏好模块补齐；超过目标时尝试精确余数组合
 """
 from __future__ import annotations
 
 import math
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from config_loader import (
     load_all_module_configs,
-    load_module_config,
     module_step,
 )
 
@@ -186,17 +185,27 @@ def select_modules(
     needed = ((needed + primary_step - 1) // primary_step) * primary_step
 
     # 推荐试排与最终生成采用相同道路规则，避免无过滤的堵路排布误判为无解。
-    # 从 needed 开始按 step 递减, 找到能放下的最大数量
+    # 从 needed 试排，用实际放置量和区间探测找到已验证可行数量
     best_selection: Dict[str, int] = {}
-    for qty in range(needed, 0, -primary_step):
-        sel = {primary_id: qty}
-        result = layout_runner(sel, site_polygon, allow_decompose=True, road_check=True)
-        if result.success and not result.unplaced:
-            best_selection = sel
-            break
+    best_selection = fit_addition({}, primary_id, needed, site_polygon, layout_runner)
 
     # 主模块归零仍放不下, 或床位不足 -> 用次偏好小模块补齐
     total_beds = _total_beds(best_selection, all_configs)
+    if total_beds < evacuees:
+        # A saturated preferred type can block the rest of a mixed layout.
+        # Try each complete target before expensive saturation/mixed searches.
+        # This also avoids computing the entire site's maximum for a feasible input.
+        for mid, cfg in candidates:
+            if mid == primary_id:
+                continue
+            step = module_step(mid)
+            quantity = math.ceil(evacuees / (int(cfg['beds']) * step)) * step
+            trial = {mid: quantity}
+            result = layout_runner(trial, site_polygon, allow_decompose=True, road_check=True)
+            if result.success and not result.unplaced:
+                best_selection = trial
+                total_beds = _total_beds(best_selection, all_configs)
+                break
     if total_beds < evacuees:
         best_selection = _fill_with_secondary(
             best_selection,
@@ -207,6 +216,9 @@ def select_modules(
             layout_runner,
         )
 
+    if recommendation_mode == "match_input":
+        best_selection = refine_bed_match(best_selection, evacuees, site_polygon, candidates, layout_runner)
+
     # 排满模式: 达标后继续加模块, 直到放不下为止
     if recommendation_mode == "fill":
         best_selection = _fill_site_to_capacity(
@@ -214,6 +226,74 @@ def select_modules(
         )
 
     return best_selection
+
+
+def fit_addition(selection, mid, desired, site, runner):
+    """Return a verified addition using placed counts and bounded interval probes.
+
+    This is a conservative greedy capacity, not a global packing optimum.
+    """
+    step = module_step(mid)
+    low, high = 0, int(desired) // step
+    best = dict(selection)
+    first = True
+    while low < high:
+        units = high if first else (low + high + 1) // 2
+        first = False
+        trial = dict(selection)
+        trial[mid] = trial.get(mid, 0) + units * step
+        result = runner(trial, site, allow_decompose=True, road_check=True)
+        if result.success and not result.unplaced:
+            best, low = trial, units
+        else:
+            high = units - 1
+            # A failed overfill already tells us how many modules were placeable.
+            # Probe that count next instead of rerunning many equally full layouts.
+            if hasattr(result, 'groups'):
+                placed = sum(len(group.modules) for group in result.groups if group.module_id == mid)
+                placed_units = max(0, (placed - selection.get(mid, 0)) // step)
+                if placed_units < high:
+                    high = placed_units
+                    first = True
+    return best
+
+
+def _exact_remainder(beds, candidates):
+    # Unbounded coin change with preference order as tie breaker.
+    reachable = {0: {}}
+    for mid, cfg in candidates:
+        step = module_step(mid)
+        unit = step * int(cfg['beds'])
+        for total in range(unit, beds + 1):
+            if total not in reachable and total - unit in reachable:
+                counts = dict(reachable[total - unit])
+                counts[mid] = counts.get(mid, 0) + step
+                reachable[total] = counts
+    return reachable.get(beds)
+
+
+def refine_bed_match(selection, target, site, candidates, runner):
+    """Replace a few preferred modules with an exact remainder, preserving group steps."""
+    configs = load_all_module_configs()
+    total = _total_beds(selection, configs)
+    if total <= target:
+        return selection
+    # Prefer the original dominant module and use the other types for the remainder.
+    for mid, cfg in sorted(candidates, key=lambda item: -selection.get(item[0], 0) * int(item[1]['beds'])):
+        step = module_step(mid)
+        unit = step * int(cfg['beds'])
+        base_qty = min(selection.get(mid, target // unit * step), target // unit * step)
+        others = [(code, config) for code, config in candidates if code != mid]
+        for qty in range(base_qty, max(-1, base_qty - step * 3), -step):
+            remainder = _exact_remainder(target - qty * int(cfg['beds']), others)
+            if remainder is None:
+                continue
+            trial = ({mid: qty} if qty else {})
+            trial.update(remainder)
+            result = runner(trial, site, allow_decompose=True, road_check=True)
+            if result.success and not result.unplaced:
+                return trial
+    return selection
 
 
 def _fill_site_to_capacity(
@@ -226,18 +306,15 @@ def _fill_site_to_capacity(
     filled = dict(selection)
     # 与主选逻辑一致: priority 升序尝试追加
     ordered = sorted(candidates, key=lambda x: int(x[1].get("priority", 99)))
-    progressed = True
-    while progressed:
-        progressed = False
-        for mid, _cfg in ordered:
-            step = module_step(mid)
-            trial = dict(filled)
-            trial[mid] = trial.get(mid, 0) + step
-            result = layout_runner(trial, site_polygon, allow_decompose=True, road_check=True)
-            if result.success and not result.unplaced:
-                filled = trial
-                progressed = True
-                break
+    area = abs(sum(site_polygon[i][0] * site_polygon[(i + 1) % len(site_polygon)][1]
+                   - site_polygon[(i + 1) % len(site_polygon)][0] * site_polygon[i][1]
+                   for i in range(len(site_polygon)))) / 2
+    for mid, cfg in ordered:
+        dimensions = cfg['dimensions']
+        module_area = dimensions['length_mm'] * dimensions['width_mm'] / 1e6
+        bed_limit = max(0, (2000 - _total_beds(filled, load_all_module_configs())) // int(cfg['beds']))
+        upper = max(0, min(int(area / module_area) - filled.get(mid, 0), bed_limit))
+        filled = fit_addition(filled, mid, upper, site_polygon, layout_runner)
     return filled
 
 
@@ -267,20 +344,6 @@ def _fill_with_secondary(
         add_qty = ((add_qty + sec_step - 1) // sec_step) * sec_step
         if add_qty <= 0:
             continue
-        trial = dict(selection)
-        trial[sec_id] = trial.get(sec_id, 0) + add_qty
-        result = layout_runner(trial, site_polygon, allow_decompose=True, road_check=True)
-        if result.success and not result.unplaced:
-            selection = trial
-        else:
-            # 尝试减半再加
-            half = max(sec_step, add_qty // 2)
-            half = ((half + sec_step - 1) // sec_step) * sec_step
-            if half > 0 and half < add_qty:
-                trial2 = dict(selection)
-                trial2[sec_id] = trial2.get(sec_id, 0) + half
-                r2 = layout_runner(trial2, site_polygon, allow_decompose=True, road_check=True)
-                if r2.success and not r2.unplaced:
-                    selection = trial2
+        selection = fit_addition(selection, sec_id, add_qty, site_polygon, layout_runner)
 
     return selection
